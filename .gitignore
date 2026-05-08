@@ -32,8 +32,12 @@ data/processed/
 
 # Excepción: archivos de configuración del proyecto (necesarios para deploy)
 !requirements.txt
+!requirements-dev.txt
 !packages.txt
 !runtime.txt
+!LICENSE
+!LICENSE.txt
+!CHANGELOG.txt
 !.streamlit/config.toml
 
 # --- Modelos entrenados pesados ---

@@ -1,0 +1,14 @@
+# ============================================================
+# eph-analyzer — dependencias solo para desarrollo local
+# (NO se instalan en Streamlit Cloud)
+# Uso:  pip install -r requirements-dev.txt
+# ============================================================
+
+-r requirements.txt
+
+# --- Notebooks / experimentación ---
+jupyter>=1.0.0
+ipykernel>=6.29.0
+
+# --- Configuración local (.env) ---
+python-dotenv>=1.0.1
