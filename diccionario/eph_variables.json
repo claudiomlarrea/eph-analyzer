@@ -1,0 +1,104 @@
+{
+  "_meta": {
+    "fuente": "INDEC - Encuesta Permanente de Hogares (EPH continua) y módulos TIC",
+    "version": "2017-2024",
+    "nota": "Diccionario base. Las claves son nombres de variable EPH; los valores describen la variable y la base donde aparece. Variables nuevas posteriores a 2024 deben agregarse manualmente."
+  },
+  "claves_unicas": {
+    "hogares": ["CODUSU", "NRO_HOGAR"],
+    "individuos": ["CODUSU", "NRO_HOGAR", "COMPONENTE"]
+  },
+  "identificacion": {
+    "CODUSU": {"desc": "Código identificador único de vivienda", "tipo": "id", "bases": ["hogar", "individuo", "tic_hogar", "tic_individual"]},
+    "NRO_HOGAR": {"desc": "Número de hogar dentro de la vivienda", "tipo": "id", "bases": ["hogar", "individuo", "tic_hogar", "tic_individual"]},
+    "COMPONENTE": {"desc": "Número de componente del hogar", "tipo": "id", "bases": ["individuo", "tic_individual"]},
+    "ANO4": {"desc": "Año de la encuesta", "tipo": "int", "bases": ["hogar", "individuo", "tic_hogar", "tic_individual"]},
+    "TRIMESTRE": {"desc": "Trimestre de la encuesta", "tipo": "int", "bases": ["hogar", "individuo", "tic_hogar", "tic_individual"]},
+    "REGION": {"desc": "Región estadística", "tipo": "categorica", "bases": ["hogar", "individuo"], "etiquetas": {"01": "Gran Buenos Aires", "40": "NOA", "41": "NEA", "42": "Cuyo", "43": "Pampeana", "44": "Patagonia"}},
+    "AGLOMERADO": {"desc": "Aglomerado urbano", "tipo": "categorica", "bases": ["hogar", "individuo"]},
+    "PONDERA": {"desc": "Ponderador del individuo / hogar", "tipo": "float", "bases": ["hogar", "individuo"]},
+    "PONDIH": {"desc": "Ponderador para ingresos del hogar", "tipo": "float", "bases": ["hogar"]},
+    "PONDII": {"desc": "Ponderador para ingresos individuales", "tipo": "float", "bases": ["individuo"]},
+    "PONDIIO": {"desc": "Ponderador para ingresos de la ocupación principal", "tipo": "float", "bases": ["individuo"]}
+  },
+  "sociodemograficas": {
+    "CH03": {"desc": "Relación de parentesco con el jefe/a de hogar", "tipo": "categorica", "bases": ["individuo"], "etiquetas": {"1": "Jefe/a", "2": "Cónyuge/Pareja", "3": "Hijo/a / Hijastro/a", "4": "Yerno/Nuera", "5": "Nieto/a", "6": "Madre/Padre", "7": "Suegro/a", "8": "Hermano/a", "9": "Otros familiares", "10": "No familiares"}},
+    "CH04": {"desc": "Sexo", "tipo": "categorica", "bases": ["individuo"], "etiquetas": {"1": "Varón", "2": "Mujer"}},
+    "CH06": {"desc": "Edad en años cumplidos", "tipo": "int", "bases": ["individuo"], "valores_especiales": {"-1": "Menor de 1 año", "99": "Sin dato"}},
+    "CH07": {"desc": "Estado civil", "tipo": "categorica", "bases": ["individuo"], "etiquetas": {"1": "Unido", "2": "Casado", "3": "Separado/divorciado", "4": "Viudo", "5": "Soltero"}},
+    "CH08": {"desc": "Cobertura médica", "tipo": "categorica", "bases": ["individuo"], "etiquetas": {"1": "Obra social (incluye PAMI)", "2": "Mutual / Prepaga / Servicio de emergencia", "3": "Planes y seguros públicos", "4": "No paga ni le descuentan", "9": "NS/NR", "12": "Obra social y mutual/prepaga", "13": "Obra social y planes y seguros públicos", "23": "Mutual/prepaga y planes y seguros públicos", "123": "Obra social, mutual/prepaga y planes y seguros públicos"}},
+    "CH09": {"desc": "¿Sabe leer y escribir?", "tipo": "categorica", "bases": ["individuo"], "etiquetas": {"1": "Sí", "2": "No", "3": "Menor de 2 años"}},
+    "CH10": {"desc": "¿Asiste o asistió a algún establecimiento educativo?", "tipo": "categorica", "bases": ["individuo"], "etiquetas": {"1": "Asiste", "2": "No asiste, pero asistió", "3": "Nunca asistió"}},
+    "CH11": {"desc": "Tipo de establecimiento educativo (público/privado)", "tipo": "categorica", "bases": ["individuo"], "etiquetas": {"1": "Público", "2": "Privado", "9": "NS/NR"}},
+    "CH12": {"desc": "Nivel educativo más alto que cursa o cursó", "tipo": "categorica", "bases": ["individuo"], "etiquetas": {"1": "Jardín/Preescolar", "2": "Primario", "3": "EGB", "4": "Secundario", "5": "Polimodal", "6": "Terciario", "7": "Universitario", "8": "Posgrado universitario", "9": "Educación especial"}},
+    "CH13": {"desc": "¿Finalizó ese nivel?", "tipo": "categorica", "bases": ["individuo"], "etiquetas": {"1": "Sí", "2": "No", "9": "NS/NR"}},
+    "CH14": {"desc": "Último año aprobado de ese nivel", "tipo": "int", "bases": ["individuo"]},
+    "CH15": {"desc": "¿Dónde nació?", "tipo": "categorica", "bases": ["individuo"]},
+    "NIVEL_ED": {"desc": "Nivel educativo (recodificado)", "tipo": "categorica", "bases": ["individuo"], "etiquetas": {"1": "Primaria incompleta (incluye sin instrucción)", "2": "Primaria completa", "3": "Secundaria incompleta", "4": "Secundaria completa", "5": "Superior universitaria incompleta", "6": "Superior universitaria completa", "7": "Sin instrucción", "9": "NS/NR"}},
+    "ESTADO": {"desc": "Condición de actividad", "tipo": "categorica", "bases": ["individuo"], "etiquetas": {"0": "Entrevista no realizada (menor de 10 años)", "1": "Ocupado", "2": "Desocupado", "3": "Inactivo", "4": "Menor de 10 años"}},
+    "CAT_OCUP": {"desc": "Categoría ocupacional", "tipo": "categorica", "bases": ["individuo"], "etiquetas": {"1": "Patrón", "2": "Cuenta propia", "3": "Obrero o empleado", "4": "Trabajador familiar sin remuneración", "9": "NS/NR"}},
+    "CAT_INAC": {"desc": "Categoría de inactividad", "tipo": "categorica", "bases": ["individuo"], "etiquetas": {"1": "Jubilado/Pensionado", "2": "Rentista", "3": "Estudiante", "4": "Ama de casa", "5": "Menor de 6 años", "6": "Discapacitado", "7": "Otros"}}
+  },
+  "ingresos": {
+    "P21": {"desc": "Monto del ingreso de la ocupación principal", "tipo": "float", "bases": ["individuo"]},
+    "P47T": {"desc": "Monto del ingreso total individual", "tipo": "float", "bases": ["individuo"]},
+    "TOT_P12": {"desc": "Monto total de los otros ingresos no laborales", "tipo": "float", "bases": ["individuo"]},
+    "ITF": {"desc": "Ingreso total familiar", "tipo": "float", "bases": ["hogar"]},
+    "IPCF": {"desc": "Ingreso per cápita familiar", "tipo": "float", "bases": ["hogar"]},
+    "DECCFR": {"desc": "Decil de ingreso per cápita familiar regional", "tipo": "categorica", "bases": ["hogar"]},
+    "DECIFR": {"desc": "Decil de ingreso total familiar regional", "tipo": "categorica", "bases": ["hogar"]}
+  },
+  "vivienda_hogar": {
+    "IV1": {"desc": "Tipo de vivienda", "tipo": "categorica", "bases": ["hogar"], "etiquetas": {"1": "Casa", "2": "Departamento", "3": "Pieza de inquilinato", "4": "Pieza en hotel/pensión", "5": "Local no construido para habitación", "6": "Vivienda móvil", "9": "NS/NR"}},
+    "IV2": {"desc": "Cantidad de ambientes/habitaciones", "tipo": "int", "bases": ["hogar"]},
+    "IV3": {"desc": "Material predominante de los pisos", "tipo": "categorica", "bases": ["hogar"]},
+    "IV4": {"desc": "Material predominante en techos", "tipo": "categorica", "bases": ["hogar"]},
+    "IV6": {"desc": "Tiene agua", "tipo": "categorica", "bases": ["hogar"]},
+    "IV7": {"desc": "Procedencia del agua", "tipo": "categorica", "bases": ["hogar"]},
+    "IV8": {"desc": "Tiene baño / letrina", "tipo": "categorica", "bases": ["hogar"]},
+    "IV9": {"desc": "El baño está dentro de la vivienda", "tipo": "categorica", "bases": ["hogar"]},
+    "IV10": {"desc": "Tiene desagüe", "tipo": "categorica", "bases": ["hogar"]},
+    "IV12_1": {"desc": "La vivienda está cerca de basurales", "tipo": "categorica", "bases": ["hogar"]},
+    "IX_TOT": {"desc": "Cantidad total de miembros del hogar", "tipo": "int", "bases": ["hogar"]},
+    "IX_MEN10": {"desc": "Cantidad de miembros menores de 10 años", "tipo": "int", "bases": ["hogar"]},
+    "IX_MAYEQ10": {"desc": "Cantidad de miembros de 10 años o más", "tipo": "int", "bases": ["hogar"]},
+    "II1": {"desc": "Cantidad de habitaciones para dormir", "tipo": "int", "bases": ["hogar"]},
+    "II7": {"desc": "Régimen de tenencia", "tipo": "categorica", "bases": ["hogar"], "etiquetas": {"1": "Propietario de vivienda y terreno", "2": "Propietario solo de la vivienda", "3": "Inquilino/arrendatario", "4": "Ocupante por relación de dependencia", "5": "Ocupante gratuito", "6": "Ocupante de hecho", "7": "Otra situación", "9": "NS/NR"}}
+  },
+  "tic_hogar": {
+    "IH_II_01": {"desc": "TIC: Hogar - acceso a teléfono fijo", "tipo": "categorica", "bases": ["tic_hogar"], "etiquetas": {"1": "Sí", "2": "No"}},
+    "IH_II_02": {"desc": "TIC: Hogar - acceso a teléfono celular", "tipo": "categorica", "bases": ["tic_hogar"], "etiquetas": {"1": "Sí", "2": "No"}},
+    "IH_II_03": {"desc": "TIC: Hogar - acceso a computadora", "tipo": "categorica", "bases": ["tic_hogar"], "etiquetas": {"1": "Sí", "2": "No"}},
+    "IH_II_04": {"desc": "TIC: Hogar - acceso a internet", "tipo": "categorica", "bases": ["tic_hogar"], "etiquetas": {"1": "Sí", "2": "No"}}
+  },
+  "tic_individual": {
+    "IP_III_04": {"desc": "TIC: Individuo - usa internet", "tipo": "categorica", "bases": ["tic_individual"], "etiquetas": {"1": "Sí", "2": "No"}},
+    "IP_III_05": {"desc": "TIC: Individuo - usa computadora", "tipo": "categorica", "bases": ["tic_individual"], "etiquetas": {"1": "Sí", "2": "No"}},
+    "IP_III_06": {"desc": "TIC: Individuo - usa celular", "tipo": "categorica", "bases": ["tic_individual"], "etiquetas": {"1": "Sí", "2": "No"}}
+  },
+  "fingerprints": {
+    "_descripcion": "Conjuntos de columnas que permiten detectar el tipo de archivo",
+    "hogar": {
+      "obligatorias": ["CODUSU", "NRO_HOGAR"],
+      "tipicas": ["IV1", "IV2", "IX_TOT", "ITF", "IPCF", "II7", "PONDIH"],
+      "minimo_match_tipicas": 3
+    },
+    "individuo": {
+      "obligatorias": ["CODUSU", "NRO_HOGAR", "COMPONENTE"],
+      "tipicas": ["CH04", "CH06", "NIVEL_ED", "ESTADO", "CAT_OCUP", "P21", "PONDII"],
+      "minimo_match_tipicas": 3
+    },
+    "tic_hogar": {
+      "obligatorias": ["CODUSU", "NRO_HOGAR"],
+      "tipicas": ["IH_II_01", "IH_II_02", "IH_II_03", "IH_II_04"],
+      "patron_columna": "^IH_",
+      "minimo_match_tipicas": 1
+    },
+    "tic_individual": {
+      "obligatorias": ["CODUSU", "NRO_HOGAR", "COMPONENTE"],
+      "tipicas": ["IP_III_04", "IP_III_05", "IP_III_06"],
+      "patron_columna": "^IP_",
+      "minimo_match_tipicas": 1
+    }
+  }
+}

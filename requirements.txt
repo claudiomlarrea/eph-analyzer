@@ -1,0 +1,38 @@
+# ============================================================
+# eph-analyzer — requirements
+# Python >= 3.10 recomendado
+# ============================================================
+
+# --- Core / datos ---
+pandas>=2.2.0
+numpy>=1.26.0
+pyarrow>=16.0.0          # Parquet
+openpyxl>=3.1.0          # Excel .xlsx
+xlrd>=2.0.1              # Excel .xls (legacy)
+dbfread>=2.0.7           # archivos .dbf de INDEC viejos
+chardet>=5.2.0           # detección de encoding en .txt/.csv
+
+# --- Análisis estadístico ---
+scipy>=1.13.0
+statsmodels>=0.14.0      # Regresión logística con OR, p-valores, pseudo-R²
+
+# --- Machine Learning ---
+scikit-learn>=1.5.0      # logística, árboles, Random Forest, K-means, métricas
+shap>=0.46.0             # interpretabilidad (XAI)
+joblib>=1.4.0            # persistencia de modelos
+
+# --- Visualización ---
+matplotlib>=3.9.0
+seaborn>=0.13.0
+plotly>=5.22.0
+
+# --- App web ---
+streamlit>=1.36.0
+streamlit-extras>=0.4.3  # widgets adicionales
+xlsxwriter>=3.2.0        # exportar resultados a Excel
+
+# --- Utilidades / desarrollo ---
+jupyter>=1.0.0
+ipykernel>=6.29.0
+tqdm>=4.66.0             # barras de progreso
+python-dotenv>=1.0.1     # variables de entorno

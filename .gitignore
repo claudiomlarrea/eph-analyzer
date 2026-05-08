@@ -1,0 +1,69 @@
+# --- Entorno virtual ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# --- Datos pesados (NUNCA subir microdatos a GitHub) ---
+data/raw/
+data/usuario/
+data/processed/
+*.xlsx
+*.xls
+*.csv
+*.dbf
+*.txt
+*.zip
+# Excepción: archivos de ejemplo livianos para demo
+!data/ejemplo/*.xlsx
+!data/ejemplo/*.csv
+!data/ejemplo/README.md
+!diccionario/*.json
+
+# Excepción: archivos de configuración del proyecto (necesarios para deploy)
+!requirements.txt
+!packages.txt
+!runtime.txt
+!.streamlit/config.toml
+
+# --- Modelos entrenados pesados ---
+models/*.pkl
+models/*.joblib
+# Excepción: dejar los chiquitos
+!models/.gitkeep
+
+# --- Streamlit secrets ---
+.streamlit/secrets.toml
+
+# --- IDE / SO ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Distribución ---
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- Coverage ---
+.coverage
+htmlcov/
+
+# --- Jupyter ---
+*.ipynb_checkpoints
