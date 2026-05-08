@@ -1,7 +1,8 @@
 # ============================================================
-# eph-analyzer — requirements
-# Python >= 3.10 recomendado
+# eph-analyzer — requirements (producción / Streamlit Cloud)
+# Python 3.11 recomendado
 # ============================================================
+# Para desarrollo local (Jupyter, etc.) ver: requirements-dev.txt
 
 # --- Core / datos ---
 pandas>=2.2.0
@@ -31,8 +32,5 @@ streamlit>=1.36.0
 streamlit-extras>=0.4.3  # widgets adicionales
 xlsxwriter>=3.2.0        # exportar resultados a Excel
 
-# --- Utilidades / desarrollo ---
-jupyter>=1.0.0
-ipykernel>=6.29.0
+# --- Utilidades ---
 tqdm>=4.66.0             # barras de progreso
-python-dotenv>=1.0.1     # variables de entorno
