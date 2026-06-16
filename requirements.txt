@@ -34,3 +34,5 @@ xlsxwriter>=3.2.0        # exportar resultados a Excel
 
 # --- Utilidades ---
 tqdm>=4.66.0             # barras de progreso
+rdata>=0.11              # microdatos .RData (mirror holatam/data)
+python-docx>=1.1         # informes Word (módulo indec_auto)

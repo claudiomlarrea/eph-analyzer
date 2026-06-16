@@ -1,0 +1,10 @@
+{
+  "titulo": "Analizador automático EPH — Gran San Juan",
+  "years": "2017-2022",
+  "trimestre": 4,
+  "ambito": "san_juan",
+  "analisis": ["descriptivos", "frecuencias", "correlaciones", "logistica", "cluster", "shap"],
+  "excel": true,
+  "word": true,
+  "force_download": false
+}

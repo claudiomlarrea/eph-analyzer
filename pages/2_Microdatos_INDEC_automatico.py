@@ -1,0 +1,198 @@
+# -*- coding: utf-8 -*-
+"""Descarga automática de microdatos INDEC (EPH + TIC) y reportes Excel/Word."""
+
+from __future__ import annotations
+
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import matplotlib
+
+matplotlib.use("Agg")
+
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+
+from indec_auto.src.analyze import ejecutar_analisis
+from indec_auto.src.config import ANALISIS_DISPONIBLES, YEARS_TIC
+from indec_auto.src.download import download_panel_tic
+from indec_auto.src.prepare import build_analysis_frame, validate_microdata
+from indec_auto.src.report import exportar_excel_bytes, exportar_word_bytes
+from indec_auto.src.request import SolicitudAnalisis
+
+CHART_COLORS = ["#1f4e79", "#2e7d32", "#c62828", "#6a1b9a"]
+
+st.set_page_config(page_title="Microdatos INDEC automático", layout="wide")
+
+ANALISIS_UI = [a for a in ANALISIS_DISPONIBLES if a != "todos"]
+
+st.title("Microdatos INDEC automático")
+st.markdown(
+    "Descarga microdatos EPH (hogar, individuo y módulo TIC/MAUTIC) desde repositorios públicos "
+    "y genera reportes en Excel y Word."
+)
+st.caption(
+    "Fuente: INDEC — EPH + MAUTIC (4.º trimestre). "
+    "Los archivos se descargan al ejecutar el análisis."
+)
+
+
+@st.cache_data(show_spinner="Descargando microdatos INDEC (hogar + individuo + TIC)…", ttl=86400)
+def cargar_microdatos(years: tuple[int, ...], trimestre: int, force: bool) -> tuple[pd.DataFrame, pd.DataFrame]:
+    hogar, individual = download_panel_tic(
+        years=list(years),
+        trimester=trimestre,
+        force=force,
+    )
+    return hogar, individual
+
+
+def _construir_solicitud() -> tuple[bool, SolicitudAnalisis]:
+    with st.sidebar:
+        st.subheader("Pedido de análisis")
+        titulo = st.text_input("Título del informe", "Análisis EPH — inclusión digital y movilidad social")
+        ambito = st.selectbox(
+            "Ámbito geográfico",
+            options=["nacional", "san_juan", "aglomerado"],
+            format_func=lambda x: {
+                "nacional": "Argentina (31 aglomerados)",
+                "san_juan": "Gran San Juan",
+                "aglomerado": "Aglomerado EPH (código)",
+            }[x],
+        )
+        aglomerado = None
+        if ambito == "aglomerado":
+            aglomerado = st.number_input("Código aglomerado INDEC", min_value=1, max_value=99, value=27)
+
+        y_min, y_max = st.select_slider(
+            "Años (4.º trimestre / módulo TIC)",
+            options=YEARS_TIC,
+            value=(YEARS_TIC[0], YEARS_TIC[-1]),
+        )
+        trimestre = st.selectbox("Trimestre", [4], index=0, help="El módulo TIC se releva en el 4T.")
+
+        st.markdown("**Análisis a incluir**")
+        todos = st.checkbox("Todos los análisis", value=True)
+        if todos:
+            analisis = ["todos"]
+        else:
+            analisis = st.multiselect(
+                "Seleccionar",
+                ANALISIS_UI,
+                default=["descriptivos", "logistica", "shap"],
+            )
+
+        fmt_excel = st.checkbox("Generar Excel", value=True)
+        fmt_word = st.checkbox("Generar Word", value=True)
+        force = st.checkbox("Forzar nueva descarga", value=False)
+
+        ejecutar = st.button("Ejecutar análisis", type="primary", use_container_width=True)
+
+    return ejecutar, SolicitudAnalisis(
+        titulo=titulo,
+        years=list(range(y_min, y_max + 1)),
+        trimestre=trimestre,
+        ambito=ambito,
+        aglomerado=int(aglomerado) if aglomerado is not None else None,
+        analisis=analisis if analisis else ["todos"],
+        excel=fmt_excel,
+        word=fmt_word,
+        force_download=force,
+    )
+
+
+ejecutar, solicitud = _construir_solicitud()
+
+if ejecutar:
+    with st.status("Procesando solicitud…", expanded=True) as status:
+        st.write(f"Ámbito: **{solicitud.label}** · Período: **{solicitud.periodo_texto()}**")
+        hogar, individual = cargar_microdatos(
+            tuple(solicitud.years),
+            solicitud.trimestre,
+            solicitud.force_download,
+        )
+        df = build_analysis_frame(hogar, individual, aglomerado=solicitud.aglomerado_filtro)
+        val = validate_microdata(df)
+        st.write(f"Registros analizados: **{len(df):,}**")
+        st.json(val)
+
+        resultado = ejecutar_analisis(
+            df,
+            tipos=solicitud.analisis_resueltos,
+            label=solicitud.label,
+        )
+        resultado["meta"] = {
+            "titulo": solicitud.titulo,
+            "ambito": solicitud.label,
+            "periodo": solicitud.periodo_texto(),
+            "registros": len(df),
+            "validacion": val,
+            "fuente": "INDEC — EPH (hogar, individuo, módulo TIC)",
+        }
+        st.session_state["indec_resultado"] = resultado
+        st.session_state["indec_solicitud"] = solicitud
+        status.update(label="Análisis completado", state="complete")
+
+resultado = st.session_state.get("indec_resultado")
+solicitud_guardada: SolicitudAnalisis | None = st.session_state.get("indec_solicitud")
+
+if resultado and solicitud_guardada:
+    tablas = resultado.get("tablas", {})
+    st.success(
+        f"Resultados listos — {resultado['meta'].get('registros', 0):,} registros · "
+        f"correlación exclusión↔movilidad: {resultado.get('correlacion_destacada', 0):.3f}"
+    )
+
+    c1, c2, c3 = st.columns(3)
+    slug = solicitud_guardada.label
+    if solicitud_guardada.excel:
+        c1.download_button(
+            "Descargar Excel",
+            data=exportar_excel_bytes(resultado),
+            file_name=f"reporte_eph_{slug}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+    if solicitud_guardada.word:
+        c2.download_button(
+            "Descargar Word",
+            data=exportar_word_bytes(
+                resultado,
+                titulo=solicitud_guardada.titulo,
+                periodo=solicitud_guardada.periodo_texto(),
+                ambito=solicitud_guardada.label,
+            ),
+            file_name=f"informe_eph_{slug}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True,
+        )
+
+    graf = resultado.get("grafico_shap")
+    if graf and Path(graf).exists():
+        c3.image(graf, caption="Importancia SHAP / evolución")
+
+    desc = tablas.get("descriptivos_anuales")
+    if desc is not None and not desc.empty:
+        st.subheader("Evolución anual")
+        fig = px.line(
+            desc,
+            x="anio",
+            y=["idx_exclusion_digital", "score_movilidad_proxy"],
+            markers=True,
+            color_discrete_sequence=CHART_COLORS[:2],
+            labels={"value": "Índice", "anio": "Año", "variable": "Indicador"},
+        )
+        fig.update_layout(
+            template="plotly_white",
+            title="Exclusión digital y movilidad social (proxy)",
+            legend_title_text="Indicador",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.dataframe(desc, use_container_width=True, hide_index=True)

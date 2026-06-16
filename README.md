@@ -39,6 +39,18 @@ streamlit run app.py
 
 La app queda accesible en `http://localhost:8501`.
 
+Incluye dos modos en el menú lateral:
+
+- **Carga manual** (`app.py`): subís archivos EPH en cualquier formato INDEC.
+- **Microdatos INDEC automático** (`pages/`): descarga panel 2017–2022 (4.º trimestre / TIC) desde repositorios públicos y exporta Excel + Word.
+
+CLI del módulo automático (sin Streamlit):
+
+```bash
+cd indec_auto
+python run.py --pedido pedidos/san_juan.json
+```
+
 ## Despliegue en Streamlit Community Cloud
 
 1. Subir el repo a GitHub.
@@ -50,7 +62,13 @@ La app queda accesible en `http://localhost:8501`.
 
 ```
 eph-analyzer/
-├── app.py                      # Punto de entrada Streamlit
+├── app.py                      # Punto de entrada Streamlit (carga manual)
+├── pages/
+│   └── 2_Microdatos_INDEC_automatico.py
+├── indec_auto/                 # Descarga INDEC + pedidos JSON + CLI
+│   ├── run.py
+│   ├── pedidos/
+│   └── src/
 ├── requirements.txt
 ├── .streamlit/config.toml
 ├── data/

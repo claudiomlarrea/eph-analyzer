@@ -1,0 +1,10 @@
+{
+  "titulo": "Analizador automático EPH — Argentina",
+  "years": "2017-2022",
+  "trimestre": 4,
+  "ambito": "nacional",
+  "analisis": ["todos"],
+  "excel": true,
+  "word": true,
+  "force_download": false
+}
