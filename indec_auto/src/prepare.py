@@ -26,6 +26,10 @@ def _yes_no_flag(s: pd.Series) -> pd.Series:
     - 2 = Sí
     - 9 = No responde
     """
+    if s is None:
+        return pd.Series(dtype=float)
+    if not isinstance(s, pd.Series):
+        s = pd.Series(s)
     v = _num(s)
     out = pd.Series(np.nan, index=s.index, dtype=float)
     out[v == 2] = 0.0  # tiene / sí
@@ -41,6 +45,10 @@ def _uso_tic_flag(s: pd.Series) -> pd.Series:
     - valores positivos = usó (minutos, frecuencia o similar)
     - -9/9 = no responde / sin dato
     """
+    if s is None:
+        return pd.Series(dtype=float)
+    if not isinstance(s, pd.Series):
+        s = pd.Series(s)
     v = _num(s)
     out = pd.Series(np.nan, index=s.index, dtype=float)
     out[v == 0] = 1.0
