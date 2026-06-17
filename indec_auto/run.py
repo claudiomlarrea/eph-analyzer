@@ -33,8 +33,9 @@ def main() -> None:
     parser.add_argument("--titulo", type=str, default=None)
     parser.add_argument("--ambito", choices=["nacional", "san_juan", "aglomerado"], default="nacional")
     parser.add_argument("--aglomerado", type=int, default=None, help="Código aglomerado EPH (si ambito=aglomerado)")
-    parser.add_argument("--years", type=str, default="2017-2022", help="Rango años con TIC, ej. 2017-2022")
-    parser.add_argument("--trimestre", type=int, default=4, help="Trimestre con módulo TIC (default: 4)")
+    parser.add_argument("--years", type=str, default="2026", help="Año o rango, ej. 2026 o 2017-2026")
+    parser.add_argument("--trimestre", type=int, default=4, help="Trimestre EPH (1..4)")
+    parser.add_argument("--modulo", choices=["tic", "base"], default="tic", help="Tipo de módulo a analizar")
     parser.add_argument(
         "--analisis",
         type=str,
@@ -50,14 +51,19 @@ def main() -> None:
     if args.pedido:
         solicitud = SolicitudAnalisis.desde_json(args.pedido)
     else:
-        y0, y1 = map(int, args.years.split("-"))
+        if "-" in args.years:
+            y0, y1 = map(int, args.years.split("-"))
+            years = list(range(y0, y1 + 1))
+        else:
+            years = [int(args.years)]
         ambito = "san_juan" if args.san_juan else args.ambito
         excel = not args.solo_word
         word = not args.solo_excel
         solicitud = SolicitudAnalisis(
             titulo=args.titulo or "Analizador automático EPH",
-            years=list(range(y0, y1 + 1)),
+            years=years,
             trimestre=args.trimestre,
+            modulo=args.modulo,
             ambito=ambito,
             aglomerado=args.aglomerado,
             analisis=[a.strip() for a in args.analisis.split(",")],
@@ -69,7 +75,8 @@ def main() -> None:
     print(f"Procesando: {solicitud.titulo}")
     print(f"  Ámbito: {solicitud.label} | Período: {solicitud.periodo_texto()}")
     print(f"  Análisis: {', '.join(sorted(solicitud.analisis_resueltos))}")
-    print("  Descargando microdatos INDEC (hogar + individuo + TIC)...")
+    print(f"  Módulo: {solicitud.modulo}")
+    print("  Descargando microdatos INDEC (hogar + individuo)...")
 
     resultado = procesar_solicitud(solicitud)
 

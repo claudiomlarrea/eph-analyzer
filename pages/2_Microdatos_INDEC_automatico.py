@@ -3,9 +3,7 @@
 
 from __future__ import annotations
 
-import os
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,8 +19,8 @@ import plotly.express as px
 import streamlit as st
 
 from indec_auto.src.analyze import ejecutar_analisis
-from indec_auto.src.config import ANALISIS_DISPONIBLES, YEARS_TIC
-from indec_auto.src.download import download_panel_tic
+from indec_auto.src.config import ANALISIS_DISPONIBLES, YEAR_MAX, YEAR_MIN
+from indec_auto.src.download import download_panel
 from indec_auto.src.prepare import build_analysis_frame, validate_microdata
 from indec_auto.src.report import exportar_excel_bytes, exportar_word_bytes
 from indec_auto.src.request import SolicitudAnalisis
@@ -38,15 +36,12 @@ st.markdown(
     "Descarga microdatos EPH (hogar, individuo y módulo TIC/MAUTIC) desde repositorios públicos "
     "y genera reportes en Excel y Word."
 )
-st.caption(
-    "Fuente: INDEC — EPH + MAUTIC (4.º trimestre). "
-    "Los archivos se descargan al ejecutar el análisis."
-)
+st.caption("Fuente: INDEC — EPH. Podés elegir módulo base (demográfico) o módulo con variables TIC.")
 
 
-@st.cache_data(show_spinner="Descargando microdatos INDEC (hogar + individuo + TIC)…", ttl=86400)
+@st.cache_data(show_spinner="Descargando microdatos INDEC (hogar + individuo)…", ttl=86400)
 def cargar_microdatos(years: tuple[int, ...], trimestre: int, force: bool) -> tuple[pd.DataFrame, pd.DataFrame]:
-    hogar, individual = download_panel_tic(
+    hogar, individual = download_panel(
         years=list(years),
         trimester=trimestre,
         force=force,
@@ -58,6 +53,11 @@ def _construir_solicitud() -> tuple[bool, SolicitudAnalisis]:
     with st.sidebar:
         st.subheader("Pedido de análisis")
         titulo = st.text_input("Título del informe", "Análisis EPH — inclusión digital y movilidad social")
+        modulo = st.selectbox(
+            "Módulo",
+            options=["tic", "base"],
+            format_func=lambda x: "Hogar + Individuo + TIC (variables digitales)" if x == "tic" else "Hogar + Individuo base (sociodemográfico)",
+        )
         ambito = st.selectbox(
             "Ámbito geográfico",
             options=["nacional", "san_juan", "aglomerado"],
@@ -71,22 +71,32 @@ def _construir_solicitud() -> tuple[bool, SolicitudAnalisis]:
         if ambito == "aglomerado":
             aglomerado = st.number_input("Código aglomerado INDEC", min_value=1, max_value=99, value=27)
 
-        y_min, y_max = st.select_slider(
-            "Años (4.º trimestre / módulo TIC)",
-            options=YEARS_TIC,
-            value=(YEARS_TIC[0], YEARS_TIC[-1]),
-        )
-        trimestre = st.selectbox("Trimestre", [4], index=0, help="El módulo TIC se releva en el 4T.")
+        year_mode = st.radio("Selección de años", ["Un año", "Rango"], horizontal=True)
+        if year_mode == "Un año":
+            year_single = st.number_input("Año", min_value=YEAR_MIN, max_value=YEAR_MAX, value=YEAR_MAX, step=1)
+            years = [int(year_single)]
+        else:
+            y_min = st.number_input("Desde", min_value=YEAR_MIN, max_value=YEAR_MAX, value=max(YEAR_MIN, YEAR_MAX - 4), step=1)
+            y_max = st.number_input("Hasta", min_value=YEAR_MIN, max_value=YEAR_MAX, value=YEAR_MAX, step=1)
+            if y_min > y_max:
+                st.warning("Ajusto el rango porque 'Desde' es mayor que 'Hasta'.")
+                y_min, y_max = y_max, y_min
+            years = list(range(int(y_min), int(y_max) + 1))
+
+        trimestre_default = 4 if modulo == "tic" else 1
+        trimestre = st.selectbox("Trimestre", [1, 2, 3, 4], index=trimestre_default - 1)
+        if modulo == "tic" and trimestre != 4:
+            st.info("Para TIC, normalmente corresponde usar T4.")
 
         st.markdown("**Análisis a incluir**")
-        todos = st.checkbox("Todos los análisis", value=True)
+        todos = st.checkbox("Todos los análisis", value=False)
         if todos:
             analisis = ["todos"]
         else:
             analisis = st.multiselect(
                 "Seleccionar",
                 ANALISIS_UI,
-                default=["descriptivos", "logistica", "shap"],
+                default=["descriptivos", "correlaciones"],
             )
 
         fmt_excel = st.checkbox("Generar Excel", value=True)
@@ -97,8 +107,9 @@ def _construir_solicitud() -> tuple[bool, SolicitudAnalisis]:
 
     return ejecutar, SolicitudAnalisis(
         titulo=titulo,
-        years=list(range(y_min, y_max + 1)),
+        years=years,
         trimestre=trimestre,
+        modulo=modulo,
         ambito=ambito,
         aglomerado=int(aglomerado) if aglomerado is not None else None,
         analisis=analisis if analisis else ["todos"],
@@ -118,7 +129,12 @@ if ejecutar:
             solicitud.trimestre,
             solicitud.force_download,
         )
-        df = build_analysis_frame(hogar, individual, aglomerado=solicitud.aglomerado_filtro)
+        df = build_analysis_frame(
+            hogar,
+            individual,
+            aglomerado=solicitud.aglomerado_filtro,
+            include_tic=(solicitud.modulo == "tic"),
+        )
         val = validate_microdata(df)
         st.write(f"Registros analizados: **{len(df):,}**")
         st.json(val)
@@ -134,7 +150,8 @@ if ejecutar:
             "periodo": solicitud.periodo_texto(),
             "registros": len(df),
             "validacion": val,
-            "fuente": "INDEC — EPH (hogar, individuo, módulo TIC)",
+            "modulo": solicitud.modulo,
+            "fuente": "INDEC — EPH (hogar + individuo, con/sin TIC según selección)",
         }
         st.session_state["indec_resultado"] = resultado
         st.session_state["indec_solicitud"] = solicitud
@@ -145,10 +162,9 @@ solicitud_guardada: SolicitudAnalisis | None = st.session_state.get("indec_solic
 
 if resultado and solicitud_guardada:
     tablas = resultado.get("tablas", {})
-    st.success(
-        f"Resultados listos — {resultado['meta'].get('registros', 0):,} registros · "
-        f"correlación exclusión↔movilidad: {resultado.get('correlacion_destacada', 0):.3f}"
-    )
+    corr = resultado.get("correlacion_destacada")
+    corr_txt = f"{corr:.3f}" if isinstance(corr, (float, int)) else "N/D"
+    st.success(f"Resultados listos — {resultado['meta'].get('registros', 0):,} registros · correlación exclusión↔movilidad: {corr_txt}")
 
     c1, c2, c3 = st.columns(3)
     slug = solicitud_guardada.label
@@ -181,10 +197,11 @@ if resultado and solicitud_guardada:
     desc = tablas.get("descriptivos_anuales")
     if desc is not None and not desc.empty:
         st.subheader("Evolución anual")
+        y_cols = [c for c in ["idx_exclusion_digital", "score_movilidad_proxy", "vulnerabilidad_social"] if c in desc.columns]
         fig = px.line(
             desc,
             x="anio",
-            y=["idx_exclusion_digital", "score_movilidad_proxy"],
+            y=y_cols,
             markers=True,
             color_discrete_sequence=CHART_COLORS[:2],
             labels={"value": "Índice", "anio": "Año", "variable": "Indicador"},

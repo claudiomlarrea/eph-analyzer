@@ -49,6 +49,20 @@ CLUSTER_FEATURES = [
 ]
 
 
+def _features_disponibles(df: pd.DataFrame) -> list[str]:
+    return [c for c in FEATURES_MODEL if c in df.columns and df[c].notna().any()]
+
+
+def _cluster_features_disponibles(df: pd.DataFrame) -> list[str]:
+    return [c for c in CLUSTER_FEATURES if c in df.columns and df[c].notna().any()]
+
+
+def _target_disponible(df: pd.DataFrame) -> str:
+    if "exclusion_digital_alta" in df.columns and df["exclusion_digital_alta"].notna().any():
+        return "exclusion_digital_alta"
+    return "vulnerabilidad_alta"
+
+
 def _ensure_out() -> Path:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     return OUTPUT_DIR
@@ -58,26 +72,27 @@ def descriptivos_por_anio(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for anio, g in df.groupby("anio"):
         w = g["PONDERA"]
-        rows.append(
-            {
-                "anio": anio,
-                "n": len(g),
-                "pct_exclusion_digital_alta": weighted_mean(g["exclusion_digital_alta"], w) * 100,
-                "idx_exclusion_digital": weighted_mean(g["idx_exclusion_digital"], w),
-                "pct_secundario_completo": weighted_mean(g["secundario_completo"], w) * 100,
-                "pct_superior": weighted_mean(g["superior"], w) * 100,
-                "pct_ocupado": weighted_mean(g["ocupado"], w) * 100,
-                "pct_informal": weighted_mean(
-                    g.loc[g["ocupado"] == 1, "informal_proxy"],
-                    g.loc[g["ocupado"] == 1, "PONDERA"],
-                )
-                * 100
-                if (g["ocupado"] == 1).any()
-                else float("nan"),
-                "score_movilidad_proxy": weighted_mean(g["score_movilidad_proxy"], w),
-                "itf_mediano_ponderado": weighted_mean(g["ITF"], w),
-            }
-        )
+        row = {
+            "anio": anio,
+            "n": len(g),
+            "pct_secundario_completo": weighted_mean(g["secundario_completo"], w) * 100,
+            "pct_superior": weighted_mean(g["superior"], w) * 100,
+            "pct_ocupado": weighted_mean(g["ocupado"], w) * 100,
+            "pct_informal": weighted_mean(
+                g.loc[g["ocupado"] == 1, "informal_proxy"],
+                g.loc[g["ocupado"] == 1, "PONDERA"],
+            )
+            * 100
+            if (g["ocupado"] == 1).any()
+            else float("nan"),
+            "score_movilidad_proxy": weighted_mean(g["score_movilidad_proxy"], w),
+            "itf_mediano_ponderado": weighted_mean(g["ITF"], w),
+            "vulnerabilidad_social": weighted_mean(g["vulnerabilidad_social"], w),
+        }
+        if "idx_exclusion_digital" in g.columns and g["idx_exclusion_digital"].notna().any():
+            row["pct_exclusion_digital_alta"] = weighted_mean(g["exclusion_digital_alta"], w) * 100
+            row["idx_exclusion_digital"] = weighted_mean(g["idx_exclusion_digital"], w)
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
@@ -103,6 +118,9 @@ def correlaciones(df: pd.DataFrame) -> pd.DataFrame:
         "ITF",
         "decil_ingreso",
     ]
+    cols = [c for c in cols if c in df.columns and df[c].notna().any()]
+    if len(cols) < 2:
+        return pd.DataFrame()
     sub = df[cols].apply(pd.to_numeric, errors="coerce")
     pearson = sub.corr(method="pearson")
     kendall = sub.corr(method="kendall")
@@ -114,13 +132,16 @@ def correlaciones(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def regresion_logistica(df: pd.DataFrame, target: str = "exclusion_digital_alta") -> dict:
-    sub = df[FEATURES_MODEL + [target, "PONDERA"]].copy()
+    features = _features_disponibles(df)
+    if not features:
+        return {"error": "sin variables suficientes"}
+    sub = df[features + [target, "PONDERA"]].copy()
     sub = sub.dropna()
     if len(sub) < 500:
         return {"error": "muestra insuficiente", "n": len(sub)}
 
     y = sub[target].astype(int)
-    X = sub[FEATURES_MODEL]
+    X = sub[features]
     w = sub["PONDERA"]
 
     pipe = Pipeline(
@@ -131,7 +152,7 @@ def regresion_logistica(df: pd.DataFrame, target: str = "exclusion_digital_alta"
         ]
     )
     pipe.fit(X, y)
-    coefs = dict(zip(FEATURES_MODEL, pipe.named_steps["clf"].coef_[0]))
+    coefs = dict(zip(features, pipe.named_steps["clf"].coef_[0]))
     pred = pipe.predict(X)
     report = classification_report(y, pred, output_dict=True, zero_division=0)
 
@@ -140,8 +161,8 @@ def regresion_logistica(df: pd.DataFrame, target: str = "exclusion_digital_alta"
     try:
         logit = sm.GLM(y, Xs, family=sm.families.Binomial(), freq_weights=w)
         res = logit.fit()
-        sm_pvalues = dict(zip(["const"] + FEATURES_MODEL, res.pvalues))
-        sm_or = {k: float(np.exp(v)) for k, v in zip(["const"] + FEATURES_MODEL, res.params)}
+        sm_pvalues = dict(zip(["const"] + features, res.pvalues))
+        sm_or = {k: float(np.exp(v)) for k, v in zip(["const"] + features, res.params)}
     except Exception as exc:
         sm_pvalues, sm_or = {}, {}
         report["statsmodels_error"] = str(exc)
@@ -158,11 +179,14 @@ def regresion_logistica(df: pd.DataFrame, target: str = "exclusion_digital_alta"
 
 
 def clustering_kmeans(df: pd.DataFrame, k: int = 4) -> dict:
-    sub = df[CLUSTER_FEATURES + ["PONDERA"]].dropna()
+    features = _cluster_features_disponibles(df)
+    if len(features) < 2:
+        return {"error": "sin variables suficientes"}
+    sub = df[features + ["PONDERA"]].dropna()
     if len(sub) < k * 50:
         return {"error": "muestra insuficiente", "n": len(sub)}
 
-    X = sub[CLUSTER_FEATURES].values
+    X = sub[features].values
     scaler = StandardScaler()
     Xs = scaler.fit_transform(X)
     km = KMeans(n_clusters=k, random_state=42, n_init=10)
@@ -171,7 +195,7 @@ def clustering_kmeans(df: pd.DataFrame, k: int = 4) -> dict:
 
     prof = sub.copy()
     prof["cluster"] = labels
-    centroids = prof.groupby("cluster")[CLUSTER_FEATURES].mean().round(4)
+    centroids = prof.groupby("cluster")[features].mean().round(4)
 
     sizes = prof["cluster"].value_counts(normalize=True).sort_index() * 100
     return {
@@ -191,10 +215,13 @@ def shap_importance(
     out_dir: Path | None = None,
     prefix: str = "nacional",
 ) -> dict:
-    sub = df[FEATURES_MODEL + [target]].dropna()
+    features = _features_disponibles(df)
+    if not features:
+        return {"error": "sin variables suficientes", "n_muestra": 0}
+    sub = df[features + [target]].dropna()
     if len(sub) > sample:
         sub = sub.sample(sample, random_state=42)
-    X = sub[FEATURES_MODEL]
+    X = sub[features]
     y = sub[target].astype(int)
 
     model = LogisticRegression(max_iter=1000, class_weight="balanced")
@@ -209,13 +236,13 @@ def shap_importance(
         shap_values = shap_values[1] if len(shap_values) > 1 else shap_values[0]
 
     mean_abs = np.abs(shap_values).mean(axis=0)
-    imp = dict(sorted(zip(FEATURES_MODEL, mean_abs), key=lambda x: -x[1]))
+    imp = dict(sorted(zip(features, mean_abs), key=lambda x: -x[1]))
     imp_pct = {k: round(v / mean_abs.sum() * 100, 2) for k, v in imp.items()}
 
     out = out_dir or _ensure_out()
     graf_path = out / f"shap_summary_{prefix}.png"
     plt.figure(figsize=(10, 6))
-    shap.summary_plot(shap_values, pd.DataFrame(Xp, columns=FEATURES_MODEL), show=False)
+    shap.summary_plot(shap_values, pd.DataFrame(Xp, columns=features), show=False)
     plt.tight_layout()
     plt.savefig(graf_path, dpi=120, bbox_inches="tight")
     plt.close()
@@ -274,8 +301,9 @@ def ejecutar_analisis(
     if "correlaciones" in tipos:
         tablas["correlaciones"] = correlaciones(df)
 
+    target_modelo = _target_disponible(df)
     if "logistica" in tipos:
-        logit = regresion_logistica(df)
+        logit = regresion_logistica(df, target=target_modelo)
         modelos["logistica"] = logit
         coef, or_df = logistica_a_tablas(logit)
         tablas["logistica_coeficientes"] = coef
@@ -294,12 +322,16 @@ def ejecutar_analisis(
             )
 
     if "shap" in tipos:
-        shap_res = shap_importance(df, out_dir=out, prefix=label)
+        shap_res = shap_importance(df, target=target_modelo, out_dir=out, prefix=label)
         modelos["shap"] = shap_res
         tablas["shap_importancia"] = shap_a_tabla(shap_res)
         grafico_shap = shap_res.get("grafico")
 
-    if "descriptivos" in tipos and not tablas.get("descriptivos_anuales", pd.DataFrame()).empty:
+    if (
+        "descriptivos" in tipos
+        and not tablas.get("descriptivos_anuales", pd.DataFrame()).empty
+        and "idx_exclusion_digital" in tablas["descriptivos_anuales"].columns
+    ):
         plt.figure(figsize=(9, 5))
         sns.lineplot(data=tablas["descriptivos_anuales"], x="anio", y="idx_exclusion_digital", marker="o")
         plt.title(f"Índice de exclusión digital — {label}")
@@ -311,7 +343,7 @@ def ejecutar_analisis(
         grafico_shap = grafico_shap or str(evo_path)
 
     correlacion = None
-    if len(df) > 10:
+    if len(df) > 10 and "idx_exclusion_digital" in df.columns:
         correlacion = float(
             df[["idx_exclusion_digital", "score_movilidad_proxy"]]
             .apply(pd.to_numeric, errors="coerce")

@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .config import AGLOMERADO_SAN_JUAN, ANALISIS_DISPONIBLES, TRIMESTER_TIC, YEARS_TIC
+from .config import AGLOMERADO_SAN_JUAN, ANALISIS_DISPONIBLES, TRIMESTER_TIC, YEARS_BASE
 
 
 @dataclass
@@ -14,14 +14,21 @@ class SolicitudAnalisis:
     """Parámetros de una solicitud de análisis EPH."""
 
     titulo: str = "Analizador automático EPH"
-    years: list[int] = field(default_factory=lambda: list(YEARS_TIC))
+    years: list[int] = field(default_factory=lambda: [max(YEARS_BASE)])
     trimestre: int = TRIMESTER_TIC
+    modulo: str = "tic"  # tic | base
     ambito: str = "nacional"  # nacional | san_juan | aglomerado
     aglomerado: int | None = None
     analisis: list[str] = field(default_factory=lambda: ["todos"])
     excel: bool = True
     word: bool = True
     force_download: bool = False
+
+    def __post_init__(self) -> None:
+        self.modulo = (self.modulo or "tic").lower()
+        if self.modulo not in {"tic", "base"}:
+            raise ValueError("modulo debe ser 'tic' o 'base'")
+        self.years = sorted({int(y) for y in self.years})
 
     @property
     def label(self) -> str:
@@ -52,6 +59,10 @@ class SolicitudAnalisis:
             )
         return items
 
+    @property
+    def modulo_label(self) -> str:
+        return "eph_tic" if self.modulo == "tic" else "eph_base"
+
     @classmethod
     def desde_json(cls, path: Path) -> SolicitudAnalisis:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -59,10 +70,13 @@ class SolicitudAnalisis:
         if isinstance(years, str) and "-" in years:
             y0, y1 = map(int, years.split("-"))
             years = list(range(y0, y1 + 1))
+        if isinstance(years, int):
+            years = [years]
         return cls(
             titulo=data.get("titulo", cls.titulo),
-            years=years or list(YEARS_TIC),
+            years=years or [max(YEARS_BASE)],
             trimestre=int(data.get("trimestre", TRIMESTER_TIC)),
+            modulo=str(data.get("modulo", "tic")).lower(),
             ambito=data.get("ambito", "nacional"),
             aglomerado=data.get("aglomerado"),
             analisis=data.get("analisis", ["todos"]),
@@ -72,4 +86,6 @@ class SolicitudAnalisis:
         )
 
     def periodo_texto(self) -> str:
+        if len(self.years) == 1:
+            return f"{self.years[0]} (T{self.trimestre})"
         return f"{min(self.years)}–{max(self.years)} (T{self.trimestre})"

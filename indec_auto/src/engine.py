@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .analyze import ejecutar_analisis
 from .config import OUTPUT_DIR
-from .download import download_panel_tic
+from .download import download_panel
 from .prepare import build_analysis_frame, validate_microdata
 from .report import exportar_excel, exportar_word
 from .request import SolicitudAnalisis
@@ -15,16 +15,21 @@ from .request import SolicitudAnalisis
 
 def procesar_solicitud(solicitud: SolicitudAnalisis) -> dict:
     """Ejecuta una solicitud completa y devuelve metadatos de salida."""
-    out_dir = OUTPUT_DIR / solicitud.label
+    out_dir = OUTPUT_DIR / f"{solicitud.modulo_label}_{solicitud.label}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    hogar, individual = download_panel_tic(
+    hogar, individual = download_panel(
         years=solicitud.years,
         trimester=solicitud.trimestre,
         force=solicitud.force_download,
     )
 
-    df = build_analysis_frame(hogar, individual, aglomerado=solicitud.aglomerado_filtro)
+    df = build_analysis_frame(
+        hogar,
+        individual,
+        aglomerado=solicitud.aglomerado_filtro,
+        include_tic=(solicitud.modulo == "tic"),
+    )
     validacion = validate_microdata(df)
 
     resultado = ejecutar_analisis(
@@ -42,7 +47,8 @@ def procesar_solicitud(solicitud: SolicitudAnalisis) -> dict:
         "registros": len(df),
         "validacion": validacion,
         "analisis": sorted(solicitud.analisis_resueltos),
-        "fuente": "INDEC — EPH (hogar, individuo, módulo TIC/MAUTIC)",
+        "modulo": solicitud.modulo,
+        "fuente": "INDEC — EPH (hogar + individuo, con/sin TIC según selección)",
     }
     resultado["meta"] = meta
 

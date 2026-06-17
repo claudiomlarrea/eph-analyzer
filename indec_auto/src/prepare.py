@@ -73,11 +73,8 @@ def validate_microdata(df: pd.DataFrame) -> dict:
         report["edad_fuera_rango"] = int(bad)
     if "ITF" in df.columns:
         report["itf_negativo"] = int((_num(df["ITF"]) < 0).sum())
-    report["missing_critico_pct"] = round(
-        df[["CH12", "ESTADO", "V11_M", "V12_M"]].isna().mean().mean() * 100, 2
-        if all(c in df.columns for c in ["CH12", "ESTADO", "V11_M", "V12_M"])
-        else 0
-    )
+    crit = [c for c in ["CH12", "ESTADO", "V11_M", "V12_M"] if c in df.columns]
+    report["missing_critico_pct"] = round(df[crit].isna().mean().mean() * 100, 2) if crit else 0.0
     return report
 
 
@@ -87,9 +84,11 @@ def build_analysis_frame(
     *,
     edad_min: int = 15,
     aglomerado: int | None = None,
+    include_tic: bool = True,
 ) -> pd.DataFrame:
     hcols = [c for c in HOGAR_CORE if c in hogar.columns]
-    icols = [c for c in IND_CORE + IND_TIC if c in individual.columns]
+    ind_cols = IND_CORE + (IND_TIC if include_tic else [])
+    icols = [c for c in ind_cols if c in individual.columns]
     for extra in ("anio", "trimestre"):
         if extra in individual.columns and extra not in icols:
             icols.append(extra)
@@ -113,25 +112,37 @@ def build_analysis_frame(
     if "trimestre" not in df.columns and "trimestre" in i.columns:
         df["trimestre"] = i["trimestre"]
 
-    # --- Dimensión acceso (hogar) ---
-    df["excl_sin_pc"] = _yes_no_flag(df.get("H_V10"))
-    df["excl_sin_internet_hogar"] = _yes_no_flag(df.get("H_V11"))
+    # --- Dimensión acceso/uso digital (solo cuando hay módulo TIC) ---
+    if include_tic:
+        df["excl_sin_pc"] = _yes_no_flag(df.get("H_V10"))
+        df["excl_sin_internet_hogar"] = _yes_no_flag(df.get("H_V11"))
+        df["excl_sin_uso_cel"] = _uso_tic_flag(df.get("V10_M"))
+        df["excl_sin_uso_pc"] = _uso_tic_flag(df.get("V11_M"))
+        df["excl_sin_uso_internet"] = _uso_tic_flag(df.get("V12_M"))
 
-    # --- Dimensión uso (individuo) ---
-    df["excl_sin_uso_cel"] = _uso_tic_flag(df.get("V10_M"))
-    df["excl_sin_uso_pc"] = _uso_tic_flag(df.get("V11_M"))
-    df["excl_sin_uso_internet"] = _uso_tic_flag(df.get("V12_M"))
+        acceso_cols = ["excl_sin_pc", "excl_sin_internet_hogar"]
+        uso_cols = ["excl_sin_uso_cel", "excl_sin_uso_pc", "excl_sin_uso_internet"]
+        all_excl = acceso_cols + uso_cols
 
-    acceso_cols = ["excl_sin_pc", "excl_sin_internet_hogar"]
-    uso_cols = ["excl_sin_uso_cel", "excl_sin_uso_pc", "excl_sin_uso_internet"]
-    all_excl = acceso_cols + uso_cols
-
-    df["idx_acceso"] = df[acceso_cols].mean(axis=1, skipna=True)
-    df["idx_uso"] = df[uso_cols].mean(axis=1, skipna=True)
-    df["idx_exclusion_digital"] = df[all_excl].mean(axis=1, skipna=True)
-    df["exclusion_digital_alta"] = (
-        df["idx_exclusion_digital"] >= df["idx_exclusion_digital"].median()
-    ).astype(int)
+        df["idx_acceso"] = df[acceso_cols].mean(axis=1, skipna=True)
+        df["idx_uso"] = df[uso_cols].mean(axis=1, skipna=True)
+        df["idx_exclusion_digital"] = df[all_excl].mean(axis=1, skipna=True)
+        df["exclusion_digital_alta"] = (
+            df["idx_exclusion_digital"] >= df["idx_exclusion_digital"].median()
+        ).astype(int)
+    else:
+        for col in (
+            "excl_sin_pc",
+            "excl_sin_internet_hogar",
+            "excl_sin_uso_cel",
+            "excl_sin_uso_pc",
+            "excl_sin_uso_internet",
+            "idx_acceso",
+            "idx_uso",
+            "idx_exclusion_digital",
+        ):
+            df[col] = np.nan
+        df["exclusion_digital_alta"] = np.nan
 
     # --- Proxies movilidad social (educación) ---
     df["secundario_completo"], df["superior"] = _educacion_proxies(df)

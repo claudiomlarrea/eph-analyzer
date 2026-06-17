@@ -47,7 +47,7 @@ def download_trimester(
     return hogar, individual
 
 
-def download_panel_tic(
+def download_panel(
     years: list[int] | None = None,
     trimester: int = TRIMESTER_TIC,
     *,
@@ -66,3 +66,13 @@ def download_panel_tic(
         hogares.append(h)
         individuos.append(i)
     return pd.concat(hogares, ignore_index=True), pd.concat(individuos, ignore_index=True)
+
+
+def download_panel_tic(
+    years: list[int] | None = None,
+    trimester: int = TRIMESTER_TIC,
+    *,
+    force: bool = False,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Compatibilidad retroactiva."""
+    return download_panel(years=years, trimester=trimester, force=force)

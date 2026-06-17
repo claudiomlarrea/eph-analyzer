@@ -1,13 +1,19 @@
 """Configuración de variables EPH / MAUTIC (módulo TIC)."""
 
 from pathlib import Path
+from datetime import datetime
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 OUTPUT_DIR = ROOT / "outputs"
 
+# Ventana amplia para EPH base (se puede ajustar desde UI/JSON)
+YEAR_MIN = 2003
+YEAR_MAX = datetime.now().year
+YEARS_BASE = list(range(YEAR_MIN, YEAR_MAX + 1))
+
 # Trimestres con módulo TIC integrado (MAUTIC en Q4; variables presentes en microdatos)
-YEARS_TIC = list(range(2017, 2023))  # 2017T4 .. 2022T4
+YEARS_TIC = list(range(2017, YEAR_MAX + 1))
 TRIMESTER_TIC = 4
 
 MIRROR_BASE = "https://github.com/holatam/data/raw/master/eph"
