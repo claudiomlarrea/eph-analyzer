@@ -51,7 +51,11 @@ def cargar_microdatos(years: tuple[int, ...], trimestre: int, force: bool) -> tu
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def anios_disponibles_remoto(trimestre: int) -> list[int]:
-    return available_years(trimestre=trimestre, year_min=YEAR_MIN, year_max=YEAR_MAX)
+    try:
+        # Posicional para evitar incompatibilidades de firma entre versiones desplegadas.
+        return available_years(trimestre, YEAR_MIN, YEAR_MAX)
+    except Exception:
+        return []
 
 
 def _construir_solicitud() -> tuple[bool, SolicitudAnalisis]:
