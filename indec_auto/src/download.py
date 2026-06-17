@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import urllib.request
 import ssl
+import urllib.error
 from pathlib import Path
 
 import pandas as pd
@@ -26,6 +27,40 @@ def _url(kind: str, year: int, trimester: int) -> str:
     return f"{MIRROR_BASE}/{kind}/base_{kind}_{year}T{trimester}.RDS"
 
 
+def _url_exists(url: str) -> bool:
+    ctx = ssl.create_default_context()
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}, method="HEAD")
+    try:
+        with urllib.request.urlopen(req, timeout=20, context=ctx):
+            return True
+    except urllib.error.HTTPError as exc:
+        if exc.code in (403, 405):
+            # Algunos hosts no aceptan HEAD; fallback a GET.
+            try:
+                with urllib.request.urlopen(
+                    urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}),
+                    timeout=20,
+                    context=ctx,
+                ):
+                    return True
+            except Exception:
+                return False
+        return False
+    except Exception:
+        return False
+
+
+def available_years(trimester: int, year_min: int, year_max: int) -> list[int]:
+    """Años disponibles en el mirror para hogar+individual del trimestre indicado."""
+    out: list[int] = []
+    for year in range(year_min, year_max + 1):
+        ok_h = _url_exists(_url("hogar", year, trimester))
+        ok_i = _url_exists(_url("individual", year, trimester))
+        if ok_h and ok_i:
+            out.append(year)
+    return out
+
+
 def download_trimester(
     year: int,
     trimester: int = TRIMESTER_TIC,
@@ -40,8 +75,13 @@ def download_trimester(
     if not force and all(p.exists() for p in paths.values()):
         return pd.read_parquet(paths["hogar"]), pd.read_parquet(paths["individual"])
 
-    hogar = _fetch_rds(_url("hogar", year, trimester))
-    individual = _fetch_rds(_url("individual", year, trimester))
+    try:
+        hogar = _fetch_rds(_url("hogar", year, trimester))
+        individual = _fetch_rds(_url("individual", year, trimester))
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(
+            f"No se encontró microdato para {year}T{trimester} en el mirror público (HTTP {exc.code})."
+        ) from exc
     hogar.to_parquet(paths["hogar"], index=False)
     individual.to_parquet(paths["individual"], index=False)
     return hogar, individual

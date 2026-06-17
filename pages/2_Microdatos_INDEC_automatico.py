@@ -20,7 +20,7 @@ import streamlit as st
 
 from indec_auto.src.analyze import ejecutar_analisis
 from indec_auto.src.config import ANALISIS_DISPONIBLES, YEAR_MAX, YEAR_MIN
-from indec_auto.src.download import download_panel
+from indec_auto.src.download import available_years, download_panel
 from indec_auto.src.prepare import build_analysis_frame, validate_microdata
 from indec_auto.src.report import exportar_excel_bytes, exportar_word_bytes
 from indec_auto.src.request import SolicitudAnalisis
@@ -47,6 +47,11 @@ def cargar_microdatos(years: tuple[int, ...], trimestre: int, force: bool) -> tu
         force=force,
     )
     return hogar, individual
+
+
+@st.cache_data(show_spinner=False, ttl=86400)
+def anios_disponibles_remoto(trimestre: int) -> list[int]:
+    return available_years(trimestre=trimestre, year_min=YEAR_MIN, year_max=YEAR_MAX)
 
 
 def _construir_solicitud() -> tuple[bool, SolicitudAnalisis]:
@@ -88,6 +93,13 @@ def _construir_solicitud() -> tuple[bool, SolicitudAnalisis]:
         if modulo == "tic" and trimestre != 4:
             st.info("Para TIC, normalmente corresponde usar T4.")
 
+        anios_disponibles = anios_disponibles_remoto(trimestre)
+        if anios_disponibles:
+            st.caption(
+                f"Años disponibles en fuente automática para T{trimestre}: "
+                f"{anios_disponibles[0]}–{anios_disponibles[-1]}"
+            )
+
         st.markdown("**Análisis a incluir**")
         todos = st.checkbox("Todos los análisis", value=False)
         if todos:
@@ -124,11 +136,30 @@ ejecutar, solicitud = _construir_solicitud()
 if ejecutar:
     with st.status("Procesando solicitud…", expanded=True) as status:
         st.write(f"Ámbito: **{solicitud.label}** · Período: **{solicitud.periodo_texto()}**")
-        hogar, individual = cargar_microdatos(
-            tuple(solicitud.years),
-            solicitud.trimestre,
-            solicitud.force_download,
-        )
+        disponibles = anios_disponibles_remoto(solicitud.trimestre)
+        faltantes = [y for y in solicitud.years if y not in disponibles]
+        if faltantes:
+            status.update(label="Solicitud con años no disponibles en fuente automática", state="error")
+            st.error(
+                "La fuente automática todavía no publica algunos años solicitados: "
+                f"{', '.join(map(str, faltantes))}. "
+                "Probá con años disponibles o usá la app manual para carga local."
+            )
+            st.stop()
+
+        try:
+            hogar, individual = cargar_microdatos(
+                tuple(solicitud.years),
+                solicitud.trimestre,
+                solicitud.force_download,
+            )
+        except Exception as exc:
+            status.update(label="Error al descargar microdatos", state="error")
+            st.error(
+                "No pude descargar los microdatos automáticamente desde la fuente pública.\n\n"
+                f"Detalle: {exc}"
+            )
+            st.stop()
         df = build_analysis_frame(
             hogar,
             individual,
