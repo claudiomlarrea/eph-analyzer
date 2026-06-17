@@ -22,7 +22,7 @@ from indec_auto.src.analyze import ejecutar_analisis
 from indec_auto.src.config import ANALISIS_DISPONIBLES, YEAR_MAX, YEAR_MIN
 from indec_auto.src.download import available_years, download_panel
 from indec_auto.src.prepare import build_analysis_frame, validate_microdata
-from indec_auto.src.report import exportar_excel_bytes, exportar_word_bytes
+from indec_auto.src.report import exportar_excel_bytes, exportar_word_bytes, resumen_interpretacion_indices
 from indec_auto.src.request import SolicitudAnalisis
 
 CHART_COLORS = ["#1f4e79", "#2e7d32", "#c62828", "#6a1b9a"]
@@ -234,6 +234,16 @@ if resultado and solicitud_guardada:
 
     desc = tablas.get("descriptivos_anuales")
     if desc is not None and not desc.empty:
+        guia = resumen_interpretacion_indices(desc)
+        if guia:
+            with st.expander("Guía de interpretación (bajo / medio / alto)", expanded=True):
+                st.markdown(
+                    "- Escala de referencia para índices entre 0 y 1: **Bajo < 0,33 · Medio 0,33-0,66 · Alto > 0,66**.\n"
+                    "- En **exclusión** y **vulnerabilidad**, alto = peor situación.\n"
+                    "- En **movilidad (proxy)**, alto = mejor situación."
+                )
+                st.dataframe(pd.DataFrame(guia), use_container_width=True, hide_index=True)
+
         st.subheader("Evolución anual")
         y_cols = [c for c in ["idx_exclusion_digital", "score_movilidad_proxy", "vulnerabilidad_social"] if c in desc.columns]
         fig = px.line(

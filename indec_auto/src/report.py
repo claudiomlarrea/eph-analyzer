@@ -23,6 +23,57 @@ except ImportError:  # pragma: no cover
     Document = None
 
 
+def _banda_0_1(valor: float) -> str:
+    if pd.isna(valor):
+        return "N/D"
+    if valor < 0.33:
+        return "Bajo"
+    if valor < 0.66:
+        return "Medio"
+    return "Alto"
+
+
+def _interpretar_indice(nombre: str, valor: float, *, invertido: bool = False) -> str:
+    banda = _banda_0_1(valor)
+    if banda == "N/D":
+        return f"{nombre}: sin datos para interpretar."
+    if invertido:
+        lectura = {"Bajo": "desfavorable", "Medio": "intermedio", "Alto": "favorable"}[banda]
+        return f"{nombre}: nivel {banda.lower()} ({valor:.3f}), desempeño {lectura}."
+    lectura = {"Bajo": "favorable", "Medio": "intermedia", "Alto": "desfavorable"}[banda]
+    return f"{nombre}: nivel {banda.lower()} ({valor:.3f}), situación {lectura}."
+
+
+def resumen_interpretacion_indices(desc: pd.DataFrame) -> list[dict[str, str | float]]:
+    """Arma una tabla de interpretación para los índices principales (escala 0-1)."""
+    if desc is None or desc.empty or "anio" not in desc.columns:
+        return []
+    ref = desc.sort_values("anio").iloc[-1]
+    anio = int(ref["anio"])
+    filas: list[dict[str, str | float]] = []
+
+    def add(indicador: str, col: str, invertido: bool = False) -> None:
+        if col not in ref.index:
+            return
+        valor = pd.to_numeric(ref[col], errors="coerce")
+        if pd.isna(valor):
+            return
+        filas.append(
+            {
+                "indicador": indicador,
+                "anio_referencia": anio,
+                "valor": round(float(valor), 4),
+                "nivel": _banda_0_1(float(valor)),
+                "interpretacion": _interpretar_indice(indicador, float(valor), invertido=invertido),
+            }
+        )
+
+    add("Exclusión digital", "idx_exclusion_digital", invertido=False)
+    add("Movilidad social (proxy)", "score_movilidad_proxy", invertido=True)
+    add("Vulnerabilidad social", "vulnerabilidad_social", invertido=False)
+    return filas
+
+
 def _escribir_excel(resultado: dict, destino) -> None:
     tablas: dict[str, pd.DataFrame] = resultado.get("tablas", {})
     with pd.ExcelWriter(destino, engine="openpyxl") as writer:
@@ -117,6 +168,13 @@ def exportar_word(
         )
 
     tablas = resultado.get("tablas", {})
+    guia = resumen_interpretacion_indices(tablas.get("descriptivos_anuales"))
+    if guia:
+        doc.add_heading("Guía de interpretación de índices (escala 0 a 1)", level=1)
+        doc.add_paragraph("Rangos sugeridos: Bajo < 0,33 · Medio 0,33-0,66 · Alto > 0,66.")
+        for fila in guia:
+            doc.add_paragraph(f"- {fila['interpretacion']}")
+
     _agregar_tabla(doc, "Indicadores anuales", tablas.get("descriptivos_anuales"))
     _agregar_tabla(doc, "Frecuencias ponderadas", tablas.get("frecuencias"))
     _agregar_tabla(doc, "Correlaciones", tablas.get("correlaciones"))
