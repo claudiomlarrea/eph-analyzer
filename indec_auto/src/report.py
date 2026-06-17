@@ -4,10 +4,17 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.export_excel import preparar_df_para_excel, preparar_metadatos_para_excel
 
 try:
     from docx import Document
@@ -20,7 +27,8 @@ def _escribir_excel(resultado: dict, destino) -> None:
     tablas: dict[str, pd.DataFrame] = resultado.get("tablas", {})
     with pd.ExcelWriter(destino, engine="openpyxl") as writer:
         meta = resultado.get("meta", {})
-        pd.DataFrame([meta]).to_excel(writer, sheet_name="metadatos", index=False)
+        if meta:
+            preparar_metadatos_para_excel(meta).to_excel(writer, sheet_name="metadatos", index=False)
         for nombre, hoja in [
             ("descriptivos", "descriptivos_anuales"),
             ("frecuencias", "frecuencias"),
@@ -33,7 +41,9 @@ def _escribir_excel(resultado: dict, destino) -> None:
         ]:
             df = tablas.get(hoja)
             if df is not None and not df.empty:
-                df.to_excel(writer, sheet_name=nombre[:31], index=False)
+                preparar_df_para_excel(df, incluir_codigo=True).to_excel(
+                    writer, sheet_name=nombre[:31], index=False
+                )
         modelos = resultado.get("modelos", {})
         if modelos:
             pd.DataFrame([modelos]).to_excel(writer, sheet_name="resumen_modelos", index=False)
@@ -62,8 +72,10 @@ def _agregar_tabla(doc: Any, titulo: str, df: pd.DataFrame, max_filas: int = 30)
     table = doc.add_table(rows=1, cols=len(sub.columns))
     table.style = "Table Grid"
     hdr = table.rows[0].cells
+    from src.etiquetador import nombre_variable
+
     for i, col in enumerate(sub.columns):
-        hdr[i].text = str(col)
+        hdr[i].text = nombre_variable(str(col))
 
     for _, row in sub.iterrows():
         cells = table.add_row().cells

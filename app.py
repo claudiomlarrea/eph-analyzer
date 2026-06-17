@@ -57,6 +57,7 @@ from src.etiquetador import (
     renombrar_columna_de_variables,
     renombrar_dataframe,
 )
+from src.export_excel import preparar_df_para_excel
 from src.file_detector import FileDetector
 from src.indice_exclusion import calcular_indice_exclusion
 from src.merger import mergear
@@ -125,8 +126,9 @@ def _cleaner():
 def _df_a_excel_bytes(df: pd.DataFrame, nombre_hoja: str = "datos") -> bytes:
     """Convierte un DataFrame a bytes XLSX para st.download_button."""
     buf = io.BytesIO()
+    df_legible = preparar_df_para_excel(df, incluir_codigo=True)
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
-        df.to_excel(writer, sheet_name=nombre_hoja[:31], index=False)
+        df_legible.to_excel(writer, sheet_name=nombre_hoja[:31], index=False)
     return buf.getvalue()
 
 
