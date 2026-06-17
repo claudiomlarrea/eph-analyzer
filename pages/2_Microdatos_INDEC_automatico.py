@@ -36,7 +36,10 @@ st.markdown(
     "Descarga microdatos EPH (hogar, individuo y módulo TIC/MAUTIC) desde repositorios públicos "
     "y genera reportes en Excel y Word."
 )
-st.caption("Fuente: INDEC — EPH. Podés elegir módulo base (demográfico) o módulo con variables TIC.")
+st.caption(
+    "Fuente automática: mirror GitHub + INDEC oficial (fallback). "
+    "Podés elegir módulo base (demográfico) o módulo con variables TIC."
+)
 
 
 @st.cache_data(show_spinner="Descargando microdatos INDEC (hogar + individuo)…", ttl=86400)
