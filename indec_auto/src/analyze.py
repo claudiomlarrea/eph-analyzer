@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -22,6 +23,12 @@ from sklearn.preprocessing import StandardScaler
 
 from .config import OUTPUT_DIR
 from .prepare import weighted_mean
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from src.etiquetador import nombre_completo  # noqa: E402
 
 
 FEATURES_MODEL = [
@@ -207,6 +214,56 @@ def clustering_kmeans(df: pd.DataFrame, k: int = 4) -> dict:
     }
 
 
+def _guardar_grafico_shap_bar(
+    imp_pct: dict[str, float],
+    destino: Path,
+    *,
+    titulo: str,
+) -> None:
+    """Gráfico de barras legible (evita outliers del beeswarm SHAP)."""
+    orden = sorted(imp_pct.items(), key=lambda x: x[1])
+    etiquetas = [nombre_completo(k) for k, _ in orden]
+    valores = [v for _, v in orden]
+
+    fig_h = max(4.5, len(etiquetas) * 0.42)
+    fig, ax = plt.subplots(figsize=(10, fig_h))
+    ax.barh(etiquetas, valores, color="#1f4e79")
+    ax.set_xlabel("Peso relativo en la predicción (%)")
+    ax.set_title(titulo)
+    ax.grid(axis="x", alpha=0.25)
+    plt.tight_layout()
+    fig.savefig(destino, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _guardar_grafico_shap_beeswarm_recortado(
+    shap_values: np.ndarray,
+    x_display: pd.DataFrame,
+    destino: Path,
+    *,
+    max_display: int = 12,
+) -> None:
+    """Beeswarm con recorte de outliers para lectura en informes."""
+    vals = np.asarray(shap_values, dtype=float)
+    if vals.size == 0:
+        return
+    p_low, p_high = np.percentile(vals, [2, 98])
+    vals_plot = np.clip(vals, p_low, p_high)
+
+    fig = plt.figure(figsize=(10, max(5, min(max_display, vals_plot.shape[1]) * 0.45)))
+    shap.summary_plot(
+        vals_plot,
+        x_display,
+        plot_type="dot",
+        max_display=max_display,
+        show=False,
+        color_bar=True,
+    )
+    plt.tight_layout()
+    fig.savefig(destino, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
 def shap_importance(
     df: pd.DataFrame,
     target: str = "exclusion_digital_alta",
@@ -240,18 +297,32 @@ def shap_importance(
     imp_pct = {k: round(v / mean_abs.sum() * 100, 2) for k, v in imp.items()}
 
     out = out_dir or _ensure_out()
-    graf_path = out / f"shap_summary_{prefix}.png"
-    plt.figure(figsize=(10, 6))
-    shap.summary_plot(shap_values, pd.DataFrame(Xp, columns=features), show=False)
-    plt.tight_layout()
-    plt.savefig(graf_path, dpi=120, bbox_inches="tight")
-    plt.close()
+    graf_bar = out / f"shap_importancia_{prefix}.png"
+    graf_beeswarm = out / f"shap_detalle_{prefix}.png"
+    etiquetas = [nombre_completo(f) for f in features]
+    x_display = pd.DataFrame(Xp, columns=etiquetas)
+
+    _guardar_grafico_shap_bar(
+        imp_pct,
+        graf_bar,
+        titulo="Importancia SHAP — variables que más explican la predicción",
+    )
+    try:
+        _guardar_grafico_shap_beeswarm_recortado(
+            shap_values,
+            x_display,
+            graf_beeswarm,
+            max_display=min(12, len(features)),
+        )
+    except Exception:
+        graf_beeswarm = None
 
     return {
         "importancia_media_absoluta": imp,
         "peso_relativo_pct": imp_pct,
         "n_muestra": len(sub),
-        "grafico": str(graf_path),
+        "grafico": str(graf_bar),
+        "grafico_detalle": str(graf_beeswarm) if graf_beeswarm else None,
     }
 
 
@@ -291,6 +362,7 @@ def ejecutar_analisis(
     tablas: dict[str, pd.DataFrame] = {}
     modelos: dict[str, object] = {}
     grafico_shap = None
+    grafico_evolucion = None
 
     if "descriptivos" in tipos:
         tablas["descriptivos_anuales"] = descriptivos_por_anio(df)
@@ -340,7 +412,7 @@ def ejecutar_analisis(
         evo_path = out / f"evolucion_exclusion_{label}.png"
         plt.savefig(evo_path, dpi=120)
         plt.close()
-        grafico_shap = grafico_shap or str(evo_path)
+        grafico_evolucion = str(evo_path)
 
     correlacion = None
     if len(df) > 10 and "idx_exclusion_digital" in df.columns:
@@ -356,6 +428,7 @@ def ejecutar_analisis(
         "modelos": modelos,
         "correlacion_destacada": correlacion,
         "grafico_shap": grafico_shap,
+        "grafico_evolucion": grafico_evolucion,
     }
 
 

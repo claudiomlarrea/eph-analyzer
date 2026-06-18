@@ -197,8 +197,25 @@ def exportar_word(
 
     grafico = resultado.get("grafico_shap")
     if grafico and Path(grafico).exists():
-        doc.add_heading("Gráfico SHAP", level=2)
+        doc.add_heading("Importancia SHAP", level=2)
+        doc.add_paragraph(
+            "El gráfico resume el peso relativo de cada variable en la predicción del modelo."
+        )
         doc.add_picture(str(grafico), width=Inches(6))
+
+    detalle = (resultado.get("modelos", {}).get("shap") or {}).get("grafico_detalle")
+    if detalle and Path(detalle).exists():
+        doc.add_heading("Detalle SHAP (distribución)", level=2)
+        doc.add_paragraph(
+            "Distribución de impactos por observación. Los valores extremos se recortan "
+            "para mejorar la lectura del gráfico."
+        )
+        doc.add_picture(str(detalle), width=Inches(6))
+
+    evo = resultado.get("grafico_evolucion")
+    if evo and Path(evo).exists():
+        doc.add_heading("Evolución de exclusión digital", level=2)
+        doc.add_picture(str(evo), width=Inches(6))
 
     doc.add_paragraph(
         "Nota metodológica: índice de exclusión digital compuesto (acceso hogar + uso individual TIC); "

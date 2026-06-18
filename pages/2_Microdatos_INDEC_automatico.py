@@ -24,6 +24,7 @@ from indec_auto.src.download import available_years, download_panel
 from indec_auto.src.prepare import build_analysis_frame, validate_microdata
 from indec_auto.src.report import exportar_excel_bytes, exportar_word_bytes, resumen_interpretacion_indices
 from indec_auto.src.request import SolicitudAnalisis
+from src.etiquetador import nombre_completo
 
 CHART_COLORS = ["#1f4e79", "#2e7d32", "#c62828", "#6a1b9a"]
 
@@ -228,9 +229,34 @@ if resultado and solicitud_guardada:
             use_container_width=True,
         )
 
-    graf = resultado.get("grafico_shap")
-    if graf and Path(graf).exists():
-        c3.image(graf, caption="Importancia SHAP / evolución")
+    shap_tab = tablas.get("shap_importancia")
+    if shap_tab is not None and not shap_tab.empty:
+        st.subheader("Importancia SHAP")
+        shap_plot = shap_tab.copy()
+        shap_plot["variable_legible"] = shap_plot["variable"].map(nombre_completo)
+        shap_plot = shap_plot.sort_values("peso_relativo_pct")
+        fig_shap = px.bar(
+            shap_plot,
+            x="peso_relativo_pct",
+            y="variable_legible",
+            orientation="h",
+            color_discrete_sequence=[CHART_COLORS[0]],
+            labels={
+                "peso_relativo_pct": "Peso relativo (%)",
+                "variable_legible": "Variable",
+            },
+            title="Variables que más explican la predicción",
+        )
+        fig_shap.update_layout(template="plotly_white", height=max(360, len(shap_plot) * 34))
+        st.plotly_chart(fig_shap, use_container_width=True)
+
+        graf_shap = resultado.get("grafico_shap")
+        if graf_shap and Path(graf_shap).exists():
+            c3.image(graf_shap, caption="Resumen SHAP (barras)")
+        detalle = (resultado.get("modelos", {}).get("shap") or {}).get("grafico_detalle")
+        if detalle and Path(detalle).exists():
+            with st.expander("Detalle SHAP (distribución, outliers recortados)"):
+                st.image(detalle, use_container_width=True)
 
     desc = tablas.get("descriptivos_anuales")
     if desc is not None and not desc.empty:
@@ -261,3 +287,8 @@ if resultado and solicitud_guardada:
         )
         st.plotly_chart(fig, use_container_width=True)
         st.dataframe(desc, use_container_width=True, hide_index=True)
+
+    evo = resultado.get("grafico_evolucion")
+    if evo and Path(evo).exists():
+        st.subheader("Evolución del índice de exclusión digital")
+        st.image(evo, use_container_width=True)
