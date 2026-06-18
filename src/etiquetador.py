@@ -58,6 +58,8 @@ NOMBRES_DERIVADAS = {
     "EXCL_SIN_USO_PC": "No usa PC",
     "EXCL_SIN_USO_INTERNET": "No usa internet",
     "REGION_NOMBRE": "Región",
+    "AGLOMERADO_NOMBRE": "Aglomerado urbano",
+    "NOMBRE_CLUSTER": "Nombre del clúster",
     "PCT_EXCLUSION_DIGITAL_ALTA": "% con exclusión digital alta",
     "PCT_SECUNDARIO_COMPLETO": "% con secundario completo",
     "PCT_SUPERIOR": "% con educación superior",

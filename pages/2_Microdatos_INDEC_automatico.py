@@ -18,6 +18,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from indec_auto.src.aglomerados import opciones_aglomerado_ui
 from indec_auto.src.analyze import ejecutar_analisis
 from indec_auto.src.config import ANALISIS_DISPONIBLES, YEAR_MAX, YEAR_MIN
 from indec_auto.src.download import available_years, download_panel
@@ -75,14 +76,19 @@ def _construir_solicitud() -> tuple[bool, SolicitudAnalisis]:
             "Ámbito geográfico",
             options=["nacional", "san_juan", "aglomerado"],
             format_func=lambda x: {
-                "nacional": "Argentina (31 aglomerados)",
+                "nacional": "Argentina (todos los aglomerados)",
                 "san_juan": "Gran San Juan",
-                "aglomerado": "Aglomerado EPH (código)",
+                "aglomerado": "Aglomerado EPH",
             }[x],
         )
         aglomerado = None
         if ambito == "aglomerado":
-            aglomerado = st.number_input("Código aglomerado INDEC", min_value=1, max_value=99, value=27)
+            opciones = opciones_aglomerado_ui()
+            etiquetas = [etiq for _, etiq in opciones]
+            codigos = [cod for cod, _ in opciones]
+            idx_default = codigos.index(27) if 27 in codigos else 0
+            elegido = st.selectbox("Aglomerado", etiquetas, index=idx_default)
+            aglomerado = codigos[etiquetas.index(elegido)]
 
         year_mode = st.radio("Selección de años", ["Un año", "Rango"], horizontal=True)
         if year_mode == "Un año":

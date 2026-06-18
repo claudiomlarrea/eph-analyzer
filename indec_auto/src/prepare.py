@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from .aglomerados import nombre_aglomerado
 from .config import HOGAR_CORE, IND_CORE, IND_TIC, REGIONES
 
 
@@ -200,6 +201,8 @@ def build_analysis_frame(
     if "REGION" in df.columns:
         reg = _col(df, "REGION").map(REGIONES).fillna("Otra")
         df["region_nombre"] = reg
+    if "AGLOMERADO" in df.columns:
+        df["aglomerado_nombre"] = _col(df, "AGLOMERADO").map(nombre_aglomerado)
 
     df["PONDERA"] = _col(df, "PONDERA").fillna(1)
 

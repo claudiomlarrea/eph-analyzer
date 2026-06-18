@@ -21,6 +21,7 @@ from sklearn.metrics import classification_report, silhouette_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from .aglomerados import nombre_aglomerado
 from .config import OUTPUT_DIR
 from .prepare import weighted_mean
 
@@ -55,6 +56,25 @@ CLUSTER_FEATURES = [
     "quintil_bajo",
 ]
 
+ESTADO_LABELS = {
+    0: "Sin dato / no relevado",
+    1: "Ocupado",
+    2: "Desocupado",
+    3: "Inactivo",
+    4: "Menor de 10 años",
+}
+
+NIVEL_ED_LABELS = {
+    1: "Primaria incompleta",
+    2: "Primaria completa",
+    3: "Secundaria incompleta",
+    4: "Secundaria completa",
+    5: "Superior universitaria incompleta",
+    6: "Superior universitaria completa",
+    7: "Sin instrucción",
+    9: "NS/NR",
+}
+
 
 def _features_disponibles(df: pd.DataFrame) -> list[str]:
     return [c for c in FEATURES_MODEL if c in df.columns and df[c].notna().any()]
@@ -62,6 +82,71 @@ def _features_disponibles(df: pd.DataFrame) -> list[str]:
 
 def _cluster_features_disponibles(df: pd.DataFrame) -> list[str]:
     return [c for c in CLUSTER_FEATURES if c in df.columns and df[c].notna().any()]
+
+
+def _etiqueta_categoria(col: str, valor) -> str:
+    if pd.isna(valor):
+        return "Sin dato"
+    if col == "aglomerado_nombre":
+        return str(valor)
+    try:
+        v = int(float(valor))
+    except (TypeError, ValueError):
+        return str(valor)
+    if col == "ESTADO":
+        return ESTADO_LABELS.get(v, str(v))
+    if col == "NIVEL_ED":
+        return NIVEL_ED_LABELS.get(v, str(v))
+    if col == "AGLOMERADO":
+        return nombre_aglomerado(v)
+    return str(valor)
+
+
+def _nombrar_cluster(perfil: dict) -> str:
+    excl = perfil.get("idx_exclusion_digital")
+    mov = perfil.get("score_movilidad_proxy")
+    vuln = perfil.get("vulnerabilidad_social")
+    educ = perfil.get("secundario_completo")
+
+    excl = float(excl) if pd.notna(excl) else None
+    mov = float(mov) if pd.notna(mov) else None
+    vuln = float(vuln) if pd.notna(vuln) else None
+    educ = float(educ) if pd.notna(educ) else None
+
+    if excl is not None and vuln is not None and excl >= 0.6 and vuln >= 0.5:
+        return "Exclusión digital y vulnerabilidad altas"
+    if excl is not None and excl >= 0.55:
+        return "Alta exclusión digital"
+    if mov is not None and mov >= 0.55 and (excl is None or excl < 0.4):
+        return "Mayor movilidad social (proxy)"
+    if vuln is not None and vuln >= 0.55:
+        return "Alta vulnerabilidad sociolaboral"
+    if educ is not None and educ >= 0.6 and excl is not None and excl < 0.35:
+        return "Educación favorable e inclusión digital"
+    if excl is not None and excl < 0.33 and mov is not None and mov >= 0.45:
+        return "Inclusión digital y movilidad favorables"
+    return "Perfil socio-digital intermedio"
+
+
+def _perfiles_por_cluster(perfiles_medios: dict) -> dict[int, dict]:
+    por_cluster: dict[int, dict] = {}
+    for feat, vals in perfiles_medios.items():
+        if not isinstance(vals, dict):
+            continue
+        for cid, val in vals.items():
+            try:
+                cid_int = int(cid)
+            except (TypeError, ValueError):
+                continue
+            por_cluster.setdefault(cid_int, {})[feat] = val
+    return por_cluster
+
+
+def _nombres_clusters(perfiles_medios: dict) -> dict[int, str]:
+    return {
+        cid: _nombrar_cluster(vals)
+        for cid, vals in _perfiles_por_cluster(perfiles_medios).items()
+    }
 
 
 def _target_disponible(df: pd.DataFrame) -> str:
@@ -105,13 +190,23 @@ def descriptivos_por_anio(df: pd.DataFrame) -> pd.DataFrame:
 
 def frecuencias_categoricas(df: pd.DataFrame) -> pd.DataFrame:
     out = []
-    for col in ["region_nombre", "ESTADO", "NIVEL_ED"]:
+    columnas = []
+    if "aglomerado_nombre" in df.columns:
+        columnas.append("aglomerado_nombre")
+    elif "AGLOMERADO" in df.columns:
+        columnas.append("AGLOMERADO")
+    columnas.extend(["region_nombre", "ESTADO", "NIVEL_ED"])
+
+    for col in columnas:
         if col not in df.columns:
             continue
-        vc = df.groupby(col)["PONDERA"].sum()
+        serie = df[col].map(lambda v: _etiqueta_categoria(col, v))
+        tmp = df.copy()
+        tmp["_categoria"] = serie
+        vc = tmp.groupby("_categoria")["PONDERA"].sum()
         vc = (vc / vc.sum() * 100).reset_index()
         vc.columns = ["categoria", "pct_ponderado"]
-        vc["variable"] = col
+        vc["variable"] = col if col != "aglomerado_nombre" else "AGLOMERADO"
         out.append(vc)
     return pd.concat(out, ignore_index=True) if out else pd.DataFrame()
 
@@ -205,12 +300,15 @@ def clustering_kmeans(df: pd.DataFrame, k: int = 4) -> dict:
     centroids = prof.groupby("cluster")[features].mean().round(4)
 
     sizes = prof["cluster"].value_counts(normalize=True).sort_index() * 100
+    perfiles = centroids.to_dict()
+    nombres = _nombres_clusters(perfiles)
     return {
         "n": len(sub),
         "k": k,
         "silhouette": sil,
         "tamano_cluster_pct": sizes.round(2).to_dict(),
-        "perfiles_medios": centroids.to_dict(),
+        "perfiles_medios": perfiles,
+        "nombres_clusters": nombres,
     }
 
 
@@ -384,14 +482,22 @@ def ejecutar_analisis(
     if "cluster" in tipos:
         clust = clustering_kmeans(df)
         modelos["cluster"] = clust
+        nombres = clust.get("nombres_clusters", {})
         if "tamano_cluster_pct" in clust:
-            tablas["cluster_tamanos"] = _dict_a_df_local(
-                clust["tamano_cluster_pct"], "cluster", "pct"
-            )
+            tam = _dict_a_df_local(clust["tamano_cluster_pct"], "cluster", "pct")
+            tam["cluster"] = tam["cluster"].astype(int)
+            tam["nombre_cluster"] = tam["cluster"].map(nombres)
+            tablas["cluster_tamanos"] = tam[["cluster", "nombre_cluster", "pct"]]
         if "perfiles_medios" in clust:
-            tablas["cluster_perfiles"] = pd.DataFrame(clust["perfiles_medios"]).T.reset_index().rename(
+            perfiles = pd.DataFrame(clust["perfiles_medios"]).T.reset_index().rename(
                 columns={"index": "cluster"}
             )
+            perfiles["cluster"] = perfiles["cluster"].astype(int)
+            perfiles["nombre_cluster"] = perfiles["cluster"].map(nombres)
+            cols = ["cluster", "nombre_cluster"] + [
+                c for c in perfiles.columns if c not in ("cluster", "nombre_cluster")
+            ]
+            tablas["cluster_perfiles"] = perfiles[cols]
 
     if "shap" in tipos:
         shap_res = shap_importance(df, target=target_modelo, out_dir=out, prefix=label)
