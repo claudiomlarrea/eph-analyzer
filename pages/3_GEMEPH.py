@@ -17,7 +17,16 @@ import streamlit as st
 from gemeph.baseline import build_baseline, load_baseline
 from gemeph.catalog import build_catalog, catalog_to_dataframe, load_catalog, persist_gemeph_run
 from gemeph.config import APP_NAME, APP_SUBTITLE, MIN_N_ADVERTENCIA
+from gemeph.mapviz import build_map_figure, metric_choices
 from gemeph.panel import load_or_build_panel, periodo_texto
+from gemeph.export import (
+    export_baseline_excel_bytes,
+    export_catalog_excel_bytes,
+    export_catalog_json_bytes,
+    export_scenario_excel_bytes,
+    export_scenario_json_bytes,
+    export_word_bytes,
+)
 from gemeph.scenario import compare_rows, lever_baselines, run_scenario
 from gemeph.territories import filter_territory, list_territories, territory_label
 from indec_auto.src.config import YEAR_MAX, YEAR_MIN
@@ -122,13 +131,89 @@ if guardar_disco and force_run:
 catalog = _catalogo_desde_panel(panel_key, panel, periodo, modulo)
 cat_df = catalog_to_dataframe(catalog)
 
+export_meta = {
+    "titulo": APP_NAME,
+    "periodo": periodo,
+    "modulo": modulo,
+    "fuente": "INDEC — EPH (hogar + individuo)",
+    "registros_panel": len(panel),
+    "n_territorios": int(catalog.get("n_territorios", 0)),
+}
+
+with st.sidebar:
+    st.divider()
+    st.subheader("Exportar")
+    slug = run_id.replace(" ", "_")
+    exp_territorio = st.selectbox(
+        "Territorio para informe / baseline",
+        territory_ids,
+        format_func=lambda x: territory_labels[x],
+        key="exp_territorio",
+    )
+    bl_export = _baseline_territorio(panel_key, panel, exp_territorio, periodo, modulo)
+
+    st.download_button(
+        "Catálogo Excel (31 aglom.)",
+        data=export_catalog_excel_bytes(cat_df, export_meta),
+        file_name=f"gemeph_catalogo_{slug}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+    st.download_button(
+        "Catálogo JSON",
+        data=export_catalog_json_bytes(catalog),
+        file_name=f"gemeph_catalogo_{slug}.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+    st.download_button(
+        "Baseline Excel (territorio)",
+        data=export_baseline_excel_bytes(bl_export, export_meta),
+        file_name=f"gemeph_baseline_{exp_territorio}_{slug}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+    st.download_button(
+        "Informe Word ejecutivo",
+        data=export_word_bytes(
+            titulo=f"{APP_NAME} — {territory_label(exp_territorio)}",
+            periodo=periodo,
+            cat_df=cat_df,
+            baseline=bl_export,
+            scenario=st.session_state.get("gemeph_last_scenario"),
+        ),
+        file_name=f"gemeph_informe_{slug}.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        use_container_width=True,
+    )
+    last_scn = st.session_state.get("gemeph_last_scenario")
+    if last_scn:
+        scn_meta = {
+            **export_meta,
+            "territorio": st.session_state.get("gemeph_last_scenario_territorio", ""),
+        }
+        st.download_button(
+            "Escenario Excel",
+            data=export_scenario_excel_bytes(last_scn, scn_meta),
+            file_name=f"gemeph_escenario_{slug}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+        st.download_button(
+            "Escenario JSON",
+            data=export_scenario_json_bytes(last_scn, scn_meta),
+            file_name=f"gemeph_escenario_{slug}.json",
+            mime="application/json",
+            use_container_width=True,
+        )
+
 st.success(
     f"Panel maestro: **{len(panel):,}** registros individuales · "
     f"Período **{periodo}** · **{catalog['n_territorios']}** territorios"
 )
 
-tab_estado, tab_comparar, tab_evolucion, tab_escenarios = st.tabs(
-    ["Estado del gemelo", "Comparar aglomerados", "Evolución", "Escenarios (what-if)"]
+tab_estado, tab_mapa, tab_comparar, tab_evolucion, tab_escenarios = st.tabs(
+    ["Estado del gemelo", "Mapa territorial", "Comparar aglomerados", "Evolución", "Escenarios (what-if)"]
 )
 
 with tab_estado:
@@ -141,9 +226,12 @@ with tab_estado:
             opciones = [tid for tid in territory_ids if q in territory_labels[tid].lower()]
         if not opciones:
             opciones = territory_ids
+        estado_default = st.session_state.get("gemeph_estado_territorio")
+        estado_index = opciones.index(estado_default) if estado_default in opciones else 0
         territorio_id = st.selectbox(
             "Territorio",
             opciones,
+            index=estado_index,
             format_func=lambda x: territory_labels[x],
         )
     with col_info:
@@ -195,6 +283,53 @@ with tab_estado:
             fig_p.update_layout(template="plotly_white", xaxis_tickangle=-25)
             st.plotly_chart(fig_p, use_container_width=True)
         st.dataframe(pdf, use_container_width=True, hide_index=True)
+
+with tab_mapa:
+    st.subheader("Mapa de aglomerados urbanos")
+    st.caption("Tamaño del punto ≈ muestra · color = indicador seleccionado · clic en la leyenda para filtrar.")
+
+    map_metrics = metric_choices(modulo == "tic")
+    map_metric = st.selectbox(
+        "Indicador en el mapa",
+        list(map_metrics.keys()),
+        format_func=lambda k: map_metrics[k],
+        key="map_metric",
+    )
+
+    aglo_opts = cat_df.loc[cat_df["tipo"] == "aglomerado", ["aglomerado_codigo", "territorio_nombre"]].dropna()
+    aglo_codes = [int(c) for c in aglo_opts["aglomerado_codigo"]]
+    aglo_labels = dict(zip(aglo_opts["aglomerado_codigo"].astype(int), aglo_opts["territorio_nombre"]))
+
+    default_idx = aglo_codes.index(27) if 27 in aglo_codes else 0
+    highlight = st.selectbox(
+        "Destacar aglomerado",
+        aglo_codes,
+        index=default_idx,
+        format_func=lambda c: aglo_labels.get(c, str(c)),
+        key="map_highlight",
+    )
+
+    fig_map = build_map_figure(
+        cat_df,
+        map_metric,
+        highlight_codigo=highlight,
+        metric_label=map_metrics[map_metric],
+    )
+    st.plotly_chart(fig_map, use_container_width=True)
+
+    hi_row = cat_df.loc[cat_df["aglomerado_codigo"] == highlight]
+    if not hi_row.empty:
+        r = hi_row.iloc[0]
+        mc1, mc2, mc3, mc4 = st.columns(4)
+        mc1.metric("Aglomerado", r["territorio_nombre"])
+        mc2.metric(map_metrics[map_metric], f"{r.get(map_metric, '—')}")
+        mc3.metric("Ocupación", f"{r.get('pct_ocupado', '—')}%")
+        if modulo == "tic":
+            mc4.metric("Exclusión digital", f"{r.get('idx_exclusion_digital', '—')}")
+
+    if st.button("Abrir estado detallado de este aglomerado", key="map_to_estado"):
+        st.session_state["gemeph_estado_territorio"] = f"aglomerado_{highlight}"
+        st.toast(f"Elegí la pestaña «Estado del gemelo» — {aglo_labels.get(highlight, '')}")
 
 with tab_comparar:
     st.subheader("Ranking de aglomerados")
@@ -332,6 +467,8 @@ with tab_escenarios:
 
         if st.button("Simular escenario", type="primary", use_container_width=True) or hay_cambio:
             resultado_scn = run_scenario(df_territorio, targets, include_tic=include_tic)
+            st.session_state["gemeph_last_scenario"] = resultado_scn
+            st.session_state["gemeph_last_scenario_territorio"] = territory_label(territorio_scn)
             cmp_df = compare_rows(resultado_scn)
 
             if cmp_df.empty:

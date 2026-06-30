@@ -1,0 +1,40 @@
+{
+  "_meta": {
+    "fuente": "Centroides aproximados de aglomerados urbanos EPH (INDEC)",
+    "nota": "Coordenadas WGS84 para visualización en mapa; no son límites oficiales."
+  },
+  "coordenadas": {
+    "2": {"lat": -34.921, "lon": -57.955, "nombre": "Gran La Plata"},
+    "3": {"lat": -38.719, "lon": -62.272, "nombre": "Bahía Blanca - Cerri"},
+    "4": {"lat": -32.944, "lon": -60.650, "nombre": "Gran Rosario"},
+    "5": {"lat": -31.633, "lon": -60.700, "nombre": "Gran Santa Fe"},
+    "6": {"lat": -31.733, "lon": -60.529, "nombre": "Gran Paraná"},
+    "7": {"lat": -27.367, "lon": -55.896, "nombre": "Posadas"},
+    "8": {"lat": -27.451, "lon": -58.986, "nombre": "Gran Resistencia"},
+    "9": {"lat": -45.866, "lon": -67.500, "nombre": "Cdro. Rivadavia - R. Tilly"},
+    "10": {"lat": -32.890, "lon": -68.845, "nombre": "Gran Mendoza"},
+    "12": {"lat": -27.469, "lon": -58.831, "nombre": "Corrientes"},
+    "13": {"lat": -31.420, "lon": -64.189, "nombre": "Gran Córdoba"},
+    "14": {"lat": -31.393, "lon": -58.021, "nombre": "Concordia"},
+    "15": {"lat": -26.185, "lon": -58.173, "nombre": "Formosa"},
+    "17": {"lat": -38.951, "lon": -68.059, "nombre": "Neuquén - Plottier"},
+    "18": {"lat": -27.795, "lon": -64.259, "nombre": "S. del Estero - La Banda"},
+    "19": {"lat": -24.185, "lon": -65.299, "nombre": "Jujuy - Palpalá"},
+    "20": {"lat": -51.623, "lon": -69.216, "nombre": "Río Gallegos"},
+    "22": {"lat": -28.469, "lon": -65.779, "nombre": "Gran Catamarca"},
+    "23": {"lat": -24.782, "lon": -65.423, "nombre": "Salta"},
+    "25": {"lat": -29.413, "lon": -66.856, "nombre": "La Rioja"},
+    "26": {"lat": -33.295, "lon": -66.336, "nombre": "San Luis - El Chorrillo"},
+    "27": {"lat": -31.537, "lon": -68.536, "nombre": "Gran San Juan"},
+    "29": {"lat": -26.808, "lon": -65.217, "nombre": "Gran Tucumán - T. Viejo"},
+    "30": {"lat": -36.620, "lon": -64.290, "nombre": "Santa Rosa - Toay"},
+    "31": {"lat": -54.801, "lon": -68.303, "nombre": "Ushuaia - Río Grande"},
+    "32": {"lat": -34.604, "lon": -58.382, "nombre": "Ciudad de Bs. As."},
+    "33": {"lat": -34.650, "lon": -58.720, "nombre": "Partidos GBA"},
+    "34": {"lat": -38.005, "lon": -57.542, "nombre": "Mar del Plata - Batán"},
+    "36": {"lat": -33.130, "lon": -64.350, "nombre": "Río Cuarto"},
+    "38": {"lat": -33.332, "lon": -60.228, "nombre": "San Nicolás - Villa Const."},
+    "91": {"lat": -43.299, "lon": -65.102, "nombre": "Rawson - Trelew"},
+    "93": {"lat": -40.813, "lon": -62.997, "nombre": "Viedma - Carmen de Patagones"}
+  }
+}

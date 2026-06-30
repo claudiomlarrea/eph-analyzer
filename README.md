@@ -43,7 +43,7 @@ Incluye dos modos en el menú lateral:
 
 - **Carga manual** (`app.py`): subís archivos EPH en cualquier formato INDEC.
 - **Microdatos INDEC automático** (`pages/`): descarga panel 2017–2022 (4.º trimestre / TIC) desde repositorios públicos y exporta Excel + Word.
-- **GEMEPH** (`pages/3_GEMEPH.py`): gemelo sociodemográfico de Argentina y los **31 aglomerados urbanos** EPH — estado territorial, comparador y evolución.
+- **GEMEPH** (`pages/3_GEMEPH.py`): gemelo sociodemográfico de Argentina y los **31 aglomerados urbanos** EPH — estado territorial, **mapa interactivo**, comparador, evolución, escenarios what-if y **exportación Excel/Word/JSON**.
 
 CLI del módulo automático (sin Streamlit):
 
