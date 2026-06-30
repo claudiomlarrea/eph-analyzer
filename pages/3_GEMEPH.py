@@ -18,7 +18,8 @@ from gemeph.baseline import build_baseline, load_baseline
 from gemeph.catalog import build_catalog, catalog_to_dataframe, load_catalog, persist_gemeph_run
 from gemeph.config import APP_NAME, APP_SUBTITLE, MIN_N_ADVERTENCIA
 from gemeph.panel import load_or_build_panel, periodo_texto
-from gemeph.territories import list_territories, territory_label
+from gemeph.scenario import compare_rows, lever_baselines, run_scenario
+from gemeph.territories import filter_territory, list_territories, territory_label
 from indec_auto.src.config import YEAR_MAX, YEAR_MIN
 
 CHART_COLORS = ["#1f4e79", "#2e7d32", "#c62828", "#6a1b9a", "#ef6c00"]
@@ -126,7 +127,9 @@ st.success(
     f"Período **{periodo}** · **{catalog['n_territorios']}** territorios"
 )
 
-tab_estado, tab_comparar, tab_evolucion = st.tabs(["Estado del gemelo", "Comparar aglomerados", "Evolución"])
+tab_estado, tab_comparar, tab_evolucion, tab_escenarios = st.tabs(
+    ["Estado del gemelo", "Comparar aglomerados", "Evolución", "Escenarios (what-if)"]
+)
 
 with tab_estado:
     col_sel, col_info = st.columns([2, 1])
@@ -259,5 +262,130 @@ with tab_evolucion:
             fig_evo.update_layout(template="plotly_white", legend_title_text="Indicador")
             st.plotly_chart(fig_evo, use_container_width=True)
         st.dataframe(evo, use_container_width=True, hide_index=True)
+
+with tab_escenarios:
+    st.subheader("Simulación predictiva (escenarios contrafactuales)")
+    st.markdown(
+        "Ajustá las barras para simular **qué pasaría** si mejoran conectividad, educación o empleo formal. "
+        "Los indicadores se recalculan sobre los microdatos del territorio; el modelo logístico estima "
+        "la probabilidad agregada de exclusión digital alta."
+    )
+
+    if modulo != "tic":
+        st.warning(
+            "Para escenarios de **exclusión digital** activá el módulo **Hogar + Individuo + TIC** "
+            "y el **trimestre IV** en la barra lateral. Podés igualmente simular educación y empleo formal."
+        )
+
+    territorio_scn = st.selectbox(
+        "Territorio del escenario",
+        territory_ids,
+        format_func=lambda x: territory_labels[x],
+        key="scn_territorio",
+    )
+    df_territorio = filter_territory(panel, territorio_scn)
+    include_tic = modulo == "tic"
+    bases = lever_baselines(df_territorio, include_tic=include_tic)
+
+    if df_territorio.empty:
+        st.error("Sin datos para este territorio en el período seleccionado.")
+    else:
+        st.caption(
+            f"**{territory_label(territorio_scn)}** · {len(df_territorio):,} individuos en muestra · "
+            "valores iniciales = situación actual (baseline)"
+        )
+
+        targets: dict[str, float] = {}
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if include_tic and "internet_quintil_i" in bases:
+                targets["internet_quintil_i"] = st.slider(
+                    "Internet en hogares del quintil I (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=float(bases["internet_quintil_i"]),
+                    step=1.0,
+                    help="Porcentaje de personas de bajos ingresos cuyo hogar tiene internet.",
+                )
+            targets["pct_superior"] = st.slider(
+                "Educación universitaria completa (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=float(bases.get("pct_superior", 0.0)),
+                step=1.0,
+            )
+        with c2:
+            targets["pct_empleo_formal"] = st.slider(
+                "Empleo formal entre ocupados (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=float(bases.get("pct_empleo_formal", 0.0)),
+                step=1.0,
+                help="Ocupados con descuentos jubilatorios (proxy de formalidad).",
+            )
+
+        hay_cambio = any(
+            abs(targets.get(k, 0) - bases.get(k, 0)) > 0.5
+            for k in targets
+        )
+
+        if st.button("Simular escenario", type="primary", use_container_width=True) or hay_cambio:
+            resultado_scn = run_scenario(df_territorio, targets, include_tic=include_tic)
+            cmp_df = compare_rows(resultado_scn)
+
+            if cmp_df.empty:
+                st.info("No hay indicadores comparables para este territorio.")
+            else:
+                st.markdown("#### Baseline vs escenario")
+                cmp_show = cmp_df.copy()
+                for col in ("Baseline", "Escenario", "Cambio"):
+                    cmp_show[col] = cmp_show[col].apply(
+                        lambda x: f"{x:+.4g}" if col == "Cambio" and pd.notna(x) else (f"{x:.4g}" if pd.notna(x) else "—")
+                    )
+                st.dataframe(cmp_show, use_container_width=True, hide_index=True)
+
+                plot_df = cmp_df.dropna(subset=["Baseline", "Escenario"]).copy()
+                if not plot_df.empty:
+                    plot_long = plot_df.melt(
+                        id_vars=["Indicador"],
+                        value_vars=["Baseline", "Escenario"],
+                        var_name="Situación",
+                        value_name="Valor",
+                    )
+                    fig_scn = px.bar(
+                        plot_long,
+                        x="Indicador",
+                        y="Valor",
+                        color="Situación",
+                        barmode="group",
+                        color_discrete_sequence=[CHART_COLORS[0], CHART_COLORS[2]],
+                        title=f"Comparación — {territory_label(territorio_scn)}",
+                    )
+                    fig_scn.update_layout(template="plotly_white", xaxis_tickangle=-25, height=420)
+                    st.plotly_chart(fig_scn, use_container_width=True)
+
+            modelo = resultado_scn.get("modelo", {})
+            if include_tic and modelo.get("pct_exclusion_predicho_base") is not None:
+                st.markdown("#### Modelo predictivo (logística)")
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Prob. exclusión alta (baseline)", f"{modelo['pct_exclusion_predicho_base']}%")
+                m2.metric(
+                    "Prob. exclusión alta (escenario)",
+                    f"{modelo.get('pct_exclusion_predicho_escenario', '—')}%",
+                )
+                if modelo.get("pct_exclusion_predicho_escenario") is not None:
+                    delta_p = round(
+                        modelo["pct_exclusion_predicho_escenario"] - modelo["pct_exclusion_predicho_base"],
+                        2,
+                    )
+                    m3.metric("Cambio estimado", f"{delta_p:+.2f} pp")
+            elif modelo.get("nota"):
+                st.caption(modelo["nota"])
+
+            st.info(
+                "**Interpretación:** escenario contrafactual analítico, no proyección oficial INDEC. "
+                "Útil para comparar políticas; no implica causalidad estricta."
+            )
 
 st.caption("Fuente: INDEC — EPH continua (microdatos hogar e individuo). GEMEPH no es proyección oficial INDEC.")
