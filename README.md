@@ -43,12 +43,19 @@ Incluye dos modos en el menú lateral:
 
 - **Carga manual** (`app.py`): subís archivos EPH en cualquier formato INDEC.
 - **Microdatos INDEC automático** (`pages/`): descarga panel 2017–2022 (4.º trimestre / TIC) desde repositorios públicos y exporta Excel + Word.
+- **GEMEPH** (`pages/3_GEMEPH.py`): gemelo sociodemográfico de Argentina y los **31 aglomerados urbanos** EPH — estado territorial, comparador y evolución.
 
 CLI del módulo automático (sin Streamlit):
 
 ```bash
 cd indec_auto
 python run.py --pedido pedidos/san_juan.json
+```
+
+CLI GEMEPH (todos los aglomerados):
+
+```bash
+python -m gemeph.build --years 2017-2024 --trimestre 4 --modulo tic
 ```
 
 ## Despliegue en Streamlit Community Cloud
@@ -64,7 +71,14 @@ python run.py --pedido pedidos/san_juan.json
 eph-analyzer/
 ├── app.py                      # Punto de entrada Streamlit (carga manual)
 ├── pages/
-│   └── 2_Microdatos_INDEC_automatico.py
+│   ├── 2_Microdatos_INDEC_automatico.py
+│   └── 3_GEMEPH.py
+├── gemeph/                     # Gemelo territorial (nacional + 31 aglomerados)
+│   ├── baseline.py
+│   ├── catalog.py
+│   ├── kpis.py
+│   ├── panel.py
+│   └── build.py                # CLI: python -m gemeph.build
 ├── indec_auto/                 # Descarga INDEC + pedidos JSON + CLI
 │   ├── run.py
 │   ├── pedidos/

@@ -18,6 +18,7 @@ __pycache__/
 data/raw/
 data/usuario/
 data/processed/
+data/gemeph/
 indec_auto/data/
 indec_auto/outputs/
 indec_auto/.mpl/
