@@ -20,6 +20,20 @@ MIRROR_BASE = "https://github.com/holatam/data/raw/master/eph"
 
 # Gran San Juan (diccionario INDEC / paquete eph)
 AGLOMERADO_SAN_JUAN = 27
+AGLOMERADO_MENDOZA = 10
+AGLOMERADO_SAN_LUIS = 26
+
+# Gran Cuyo urbano (EPH): Mendoza, San Luis y San Juan
+AGLOMERADOS_CUYO = (AGLOMERADO_MENDOZA, AGLOMERADO_SAN_LUIS, AGLOMERADO_SAN_JUAN)
+
+# Preset del proyecto UCCuyo: brecha digital y movilidad social en Cuyo
+PROYECTO_CUYO_YEAR_MIN = 2024
+PROYECTO_CUYO_YEAR_MAX = YEAR_MAX
+PROYECTO_CUYO_TRIMESTRE = TRIMESTER_TIC
+PROYECTO_CUYO_TITULO = (
+    "Brecha digital y movilidad social en Cuyo: "
+    "observatorio empírico con microdatos EPH/TIC (2024–2026)"
+)
 
 REGIONES = {
     1: "GBA",
@@ -42,6 +56,7 @@ IND_CORE = [
     "REGION",
     "CH04",
     "CH06",
+    "CH10",  # asistencia educativa (para NEET)
     "CH12",
     "NIVEL_ED",
     "ESTADO",
@@ -51,6 +66,7 @@ IND_CORE = [
     "ITF",
     "DECIFR",
     "IPCF",
+    "RELACION",  # parentesco / jefatura de hogar
 ]
 
 # Análisis disponibles para solicitudes del usuario

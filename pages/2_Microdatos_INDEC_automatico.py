@@ -20,9 +20,18 @@ import streamlit as st
 
 from indec_auto.src.aglomerados import opciones_aglomerado_ui
 from indec_auto.src.analyze import ejecutar_analisis
-from indec_auto.src.config import ANALISIS_DISPONIBLES, YEAR_MAX, YEAR_MIN
+from indec_auto.src.config import (
+    ANALISIS_DISPONIBLES,
+    PROYECTO_CUYO_TITULO,
+    PROYECTO_CUYO_TRIMESTRE,
+    PROYECTO_CUYO_YEAR_MAX,
+    PROYECTO_CUYO_YEAR_MIN,
+    YEAR_MAX,
+    YEAR_MIN,
+)
 from indec_auto.src.download import available_years, download_panel
 from indec_auto.src.prepare import build_analysis_frame, validate_microdata
+from indec_auto.src.proyecto_cuyo import anios_proyecto_disponibles, ejecutar_proyecto_cuyo
 from indec_auto.src.report import exportar_excel_bytes, exportar_word_bytes, resumen_interpretacion_indices
 from indec_auto.src.request import SolicitudAnalisis
 from src.etiquetador import nombre_completo
@@ -57,26 +66,108 @@ def cargar_microdatos(years: tuple[int, ...], trimestre: int, force: bool) -> tu
 @st.cache_data(show_spinner=False, ttl=86400)
 def anios_disponibles_remoto(trimestre: int) -> list[int]:
     try:
-        # Posicional para evitar incompatibilidades de firma entre versiones desplegadas.
         return available_years(trimestre, YEAR_MIN, YEAR_MAX)
     except Exception:
         return []
 
 
+@st.cache_data(show_spinner=False, ttl=3600)
+def anios_proyecto_cache(trimestre: int) -> list[int]:
+    try:
+        return anios_proyecto_disponibles(trimestre)
+    except Exception:
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Modo Proyecto Cuyo (one-click)
+# ---------------------------------------------------------------------------
+st.header("Proyecto Cuyo — un clic")
+st.markdown(
+    f"**{PROYECTO_CUYO_TITULO}**  \n"
+    "Descarga directa de microdatos INDEC (T4 / TIC), analiza Nación + Gran Cuyo + "
+    "Mendoza + San Luis + San Juan, y genera los resultados de los objetivos del proyecto."
+)
+
+anios_proy = anios_proyecto_cache(PROYECTO_CUYO_TRIMESTRE)
+if anios_proy:
+    st.info(
+        f"Años disponibles para el proyecto (T{PROYECTO_CUYO_TRIMESTRE}): "
+        f"**{anios_proy[0]}–{anios_proy[-1]}** · rango objetivo {PROYECTO_CUYO_YEAR_MIN}–{PROYECTO_CUYO_YEAR_MAX}."
+    )
+else:
+    st.warning(
+        f"No se detectaron años {PROYECTO_CUYO_YEAR_MIN}–{PROYECTO_CUYO_YEAR_MAX} en T{PROYECTO_CUYO_TRIMESTRE}. "
+        "Podés forzar descarga o usar el modo manual abajo."
+    )
+
+c_force, c_run = st.columns([1, 2])
+with c_force:
+    force_proyecto = st.checkbox("Forzar nueva descarga (proyecto)", value=False, key="force_proyecto_cuyo")
+with c_run:
+    ejecutar_proyecto = st.button(
+        "▶ Ejecutar proyecto Cuyo (INDEC → resultados por objetivo)",
+        type="primary",
+        use_container_width=True,
+    )
+
+if ejecutar_proyecto:
+    with st.status("Ejecutando proyecto Cuyo…", expanded=True) as status:
+        logs: list[str] = []
+
+        def _progress(msg: str) -> None:
+            logs.append(msg)
+            st.write(msg)
+
+        try:
+            resultado = ejecutar_proyecto_cuyo(
+                years=anios_proy or None,
+                trimestre=PROYECTO_CUYO_TRIMESTRE,
+                force_download=force_proyecto,
+                titulo=PROYECTO_CUYO_TITULO,
+                progress=_progress,
+            )
+        except Exception as exc:
+            status.update(label="Error en proyecto Cuyo", state="error")
+            st.error(f"No pude completar el proyecto automáticamente.\n\nDetalle: {exc}")
+            st.stop()
+
+        st.session_state["indec_resultado"] = resultado
+        st.session_state["indec_solicitud"] = SolicitudAnalisis(
+            titulo=PROYECTO_CUYO_TITULO,
+            years=resultado["meta"].get("anios", anios_proy),
+            trimestre=PROYECTO_CUYO_TRIMESTRE,
+            modulo="tic",
+            ambito="cuyo",
+            analisis=["todos"],
+            excel=True,
+            word=True,
+            force_download=force_proyecto,
+        )
+        st.session_state["modo_proyecto_cuyo"] = True
+        status.update(label="Proyecto Cuyo completado", state="complete")
+
+
 def _construir_solicitud() -> tuple[bool, SolicitudAnalisis]:
     with st.sidebar:
         st.subheader("Pedido de análisis")
-        titulo = st.text_input("Título del informe", "Análisis EPH — inclusión digital y movilidad social")
+        st.caption("Modo manual (si no usás el botón Proyecto Cuyo).")
+        titulo = st.text_input("Título del informe", PROYECTO_CUYO_TITULO)
         modulo = st.selectbox(
             "Módulo",
             options=["tic", "base"],
-            format_func=lambda x: "Hogar + Individuo + TIC (variables digitales)" if x == "tic" else "Hogar + Individuo base (sociodemográfico)",
+            format_func=lambda x: (
+                "Hogar + Individuo + TIC (variables digitales)"
+                if x == "tic"
+                else "Hogar + Individuo base (sociodemográfico)"
+            ),
         )
         ambito = st.selectbox(
             "Ámbito geográfico",
-            options=["nacional", "san_juan", "aglomerado"],
+            options=["nacional", "cuyo", "san_juan", "aglomerado"],
             format_func=lambda x: {
                 "nacional": "Argentina (todos los aglomerados)",
+                "cuyo": "Gran Cuyo (Mendoza + San Luis + San Juan)",
                 "san_juan": "Gran San Juan",
                 "aglomerado": "Aglomerado EPH",
             }[x],
@@ -92,11 +183,29 @@ def _construir_solicitud() -> tuple[bool, SolicitudAnalisis]:
 
         year_mode = st.radio("Selección de años", ["Un año", "Rango"], horizontal=True)
         if year_mode == "Un año":
-            year_single = st.number_input("Año", min_value=YEAR_MIN, max_value=YEAR_MAX, value=YEAR_MAX, step=1)
+            year_single = st.number_input(
+                "Año",
+                min_value=YEAR_MIN,
+                max_value=YEAR_MAX,
+                value=min(YEAR_MAX, PROYECTO_CUYO_YEAR_MAX),
+                step=1,
+            )
             years = [int(year_single)]
         else:
-            y_min = st.number_input("Desde", min_value=YEAR_MIN, max_value=YEAR_MAX, value=max(YEAR_MIN, YEAR_MAX - 4), step=1)
-            y_max = st.number_input("Hasta", min_value=YEAR_MIN, max_value=YEAR_MAX, value=YEAR_MAX, step=1)
+            y_min = st.number_input(
+                "Desde",
+                min_value=YEAR_MIN,
+                max_value=YEAR_MAX,
+                value=max(YEAR_MIN, PROYECTO_CUYO_YEAR_MIN),
+                step=1,
+            )
+            y_max = st.number_input(
+                "Hasta",
+                min_value=YEAR_MIN,
+                max_value=YEAR_MAX,
+                value=min(YEAR_MAX, PROYECTO_CUYO_YEAR_MAX),
+                step=1,
+            )
             if y_min > y_max:
                 st.warning("Ajusto el rango porque 'Desde' es mayor que 'Hasta'.")
                 y_min, y_max = y_max, y_min
@@ -115,21 +224,21 @@ def _construir_solicitud() -> tuple[bool, SolicitudAnalisis]:
             )
 
         st.markdown("**Análisis a incluir**")
-        todos = st.checkbox("Todos los análisis", value=False)
+        todos = st.checkbox("Todos los análisis", value=True)
         if todos:
             analisis = ["todos"]
         else:
             analisis = st.multiselect(
                 "Seleccionar",
                 ANALISIS_UI,
-                default=["descriptivos", "correlaciones"],
+                default=["descriptivos", "correlaciones", "logistica", "cluster", "shap"],
             )
 
         fmt_excel = st.checkbox("Generar Excel", value=True)
         fmt_word = st.checkbox("Generar Word", value=True)
         force = st.checkbox("Forzar nueva descarga", value=False)
 
-        ejecutar = st.button("Ejecutar análisis", type="primary", use_container_width=True)
+        ejecutar = st.button("Ejecutar análisis", type="secondary", use_container_width=True)
 
     return ejecutar, SolicitudAnalisis(
         titulo=titulo,
@@ -178,6 +287,7 @@ if ejecutar:
             hogar,
             individual,
             aglomerado=solicitud.aglomerado_filtro,
+            aglomerados=solicitud.aglomerados_filtro,
             include_tic=(solicitud.modulo == "tic"),
         )
         val = validate_microdata(df)
@@ -200,19 +310,24 @@ if ejecutar:
         }
         st.session_state["indec_resultado"] = resultado
         st.session_state["indec_solicitud"] = solicitud
+        st.session_state["modo_proyecto_cuyo"] = False
         status.update(label="Análisis completado", state="complete")
 
 resultado = st.session_state.get("indec_resultado")
 solicitud_guardada: SolicitudAnalisis | None = st.session_state.get("indec_solicitud")
+modo_proyecto = bool(st.session_state.get("modo_proyecto_cuyo"))
 
 if resultado and solicitud_guardada:
     tablas = resultado.get("tablas", {})
     corr = resultado.get("correlacion_destacada")
     corr_txt = f"{corr:.3f}" if isinstance(corr, (float, int)) else "N/D"
-    st.success(f"Resultados listos — {resultado['meta'].get('registros', 0):,} registros · correlación exclusión↔movilidad: {corr_txt}")
+    st.success(
+        f"Resultados listos — {resultado['meta'].get('registros', 0):,} registros · "
+        f"correlación exclusión↔movilidad: {corr_txt}"
+    )
 
     c1, c2, c3 = st.columns(3)
-    slug = solicitud_guardada.label
+    slug = "proyecto_cuyo" if modo_proyecto else solicitud_guardada.label
     if solicitud_guardada.excel:
         c1.download_button(
             "Descargar Excel",
@@ -228,14 +343,61 @@ if resultado and solicitud_guardada:
                 resultado,
                 titulo=solicitud_guardada.titulo,
                 periodo=solicitud_guardada.periodo_texto(),
-                ambito=solicitud_guardada.label,
+                ambito=resultado["meta"].get("ambito", solicitud_guardada.label),
             ),
             file_name=f"informe_eph_{slug}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             use_container_width=True,
         )
 
-    shap_tab = tablas.get("shap_importancia")
+    # --- Vista Proyecto Cuyo ---
+    if modo_proyecto:
+        st.subheader("Hallazgos por objetivo del proyecto")
+        hallazgos = resultado.get("hallazgos") or []
+        for h in hallazgos:
+            st.markdown(f"**{h.get('objetivo', '')}**  \n{h.get('hallazgo', '')}")
+
+        comp = tablas.get("comparativo_ambitos")
+        if comp is not None and not comp.empty:
+            st.subheader("Comparativo Nación / Cuyo / provincias")
+            st.dataframe(comp, use_container_width=True, hide_index=True)
+            y_cols = [
+                c
+                for c in ["idx_exclusion_digital", "score_movilidad_proxy", "vulnerabilidad_social"]
+                if c in comp.columns
+            ]
+            if y_cols:
+                fig_comp = px.bar(
+                    comp,
+                    x="label",
+                    y=y_cols,
+                    barmode="group",
+                    color_discrete_sequence=CHART_COLORS,
+                    labels={"value": "Índice", "label": "Ámbito", "variable": "Indicador"},
+                    title="Exclusión digital, movilidad y vulnerabilidad por ámbito",
+                )
+                fig_comp.update_layout(template="plotly_white")
+                st.plotly_chart(fig_comp, use_container_width=True)
+
+        perf = tablas.get("perfiles_vulnerables")
+        if perf is not None and not perf.empty:
+            st.subheader("Perfiles vulnerables (OE3)")
+            st.dataframe(perf, use_container_width=True, hide_index=True)
+            cuyo_perf = perf.loc[perf["ambito"] == "gran_cuyo"] if "ambito" in perf.columns else perf
+            if not cuyo_perf.empty and "idx_exclusion_digital" in cuyo_perf.columns:
+                fig_p = px.bar(
+                    cuyo_perf.sort_values("idx_exclusion_digital"),
+                    x="idx_exclusion_digital",
+                    y="perfil",
+                    orientation="h",
+                    color_discrete_sequence=[CHART_COLORS[2]],
+                    title="Exclusión digital por perfil — Gran Cuyo",
+                    labels={"idx_exclusion_digital": "Índice exclusión digital", "perfil": "Perfil"},
+                )
+                fig_p.update_layout(template="plotly_white")
+                st.plotly_chart(fig_p, use_container_width=True)
+
+    shap_tab = tablas.get("shap_importancia") or tablas.get("cuyo_shap_importancia")
     if shap_tab is not None and not shap_tab.empty:
         st.subheader("Importancia SHAP")
         shap_plot = shap_tab.copy()
@@ -264,7 +426,7 @@ if resultado and solicitud_guardada:
             with st.expander("Detalle SHAP (distribución, outliers recortados)"):
                 st.image(detalle, use_container_width=True)
 
-    desc = tablas.get("descriptivos_anuales")
+    desc = tablas.get("descriptivos_anuales") or tablas.get("cuyo_descriptivos_anuales")
     if desc is not None and not desc.empty:
         guia = resumen_interpretacion_indices(desc)
         if guia:
@@ -277,7 +439,11 @@ if resultado and solicitud_guardada:
                 st.dataframe(pd.DataFrame(guia), use_container_width=True, hide_index=True)
 
         st.subheader("Evolución anual")
-        y_cols = [c for c in ["idx_exclusion_digital", "score_movilidad_proxy", "vulnerabilidad_social"] if c in desc.columns]
+        y_cols = [
+            c
+            for c in ["idx_exclusion_digital", "score_movilidad_proxy", "vulnerabilidad_social"]
+            if c in desc.columns
+        ]
         fig = px.line(
             desc,
             x="anio",

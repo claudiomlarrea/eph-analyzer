@@ -42,7 +42,8 @@ La app queda accesible en `http://localhost:8501`.
 Incluye dos modos en el menú lateral:
 
 - **Carga manual** (`app.py`): subís archivos EPH en cualquier formato INDEC.
-- **Microdatos INDEC automático** (`pages/`): descarga panel 2017–2022 (4.º trimestre / TIC) desde repositorios públicos y exporta Excel + Word.
+- **Microdatos INDEC automático** (`pages/`): descarga panel EPH/TIC desde repositorios públicos y exporta Excel + Word.
+  - Incluye el botón **Proyecto Cuyo**: un clic descarga microdatos INDEC (T4, 2024–año actual), analiza Nación + Gran Cuyo + Mendoza + San Luis + San Juan, y genera hallazgos por objetivo del proyecto UCCuyo (comparativo, perfiles vulnerables, logística, clústeres, SHAP).
 - **GEMEPH** (`pages/3_GEMEPH.py`): gemelo sociodemográfico de Argentina y los **31 aglomerados urbanos** EPH — estado territorial, **mapa interactivo**, comparador, evolución, escenarios what-if y **exportación Excel/Word/JSON**.
 
 CLI del módulo automático (sin Streamlit):

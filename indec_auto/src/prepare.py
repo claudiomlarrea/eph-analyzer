@@ -93,6 +93,7 @@ def build_analysis_frame(
     *,
     edad_min: int = 15,
     aglomerado: int | None = None,
+    aglomerados: list[int] | tuple[int, ...] | None = None,
     include_tic: bool = True,
 ) -> pd.DataFrame:
     hcols = [c for c in HOGAR_CORE if c in hogar.columns]
@@ -106,8 +107,14 @@ def build_analysis_frame(
     i["CH06"] = _num(i["CH06"])
     i = i[i["CH06"] >= edad_min]
 
-    if aglomerado is not None:
-        i = i[_col(i, "AGLOMERADO") == aglomerado]
+    filtro_aglomerados: list[int] = []
+    if aglomerados:
+        filtro_aglomerados = [int(a) for a in aglomerados]
+    elif aglomerado is not None:
+        filtro_aglomerados = [int(aglomerado)]
+
+    if filtro_aglomerados:
+        i = i[_col(i, "AGLOMERADO").isin(filtro_aglomerados)]
         codus = set(i["CODUSU"])
         h = h[h["CODUSU"].isin(codus)]
 
@@ -198,6 +205,20 @@ def build_analysis_frame(
 
     df["sexo_mujer"] = (_col(df, "CH04") == 2).astype(float)
     df["edad"] = df["CH06"]
+    # Perfiles prioritarios del proyecto Cuyo
+    df["joven_15_24"] = ((_col(df, "CH06") >= 15) & (_col(df, "CH06") <= 24)).astype(float)
+    # CH10: 1=asiste, 2=no asiste pero asistió, 3=nunca asistió (códigos EPH típicos)
+    ch10 = _col(df, "CH10")
+    joven_no_ocupado = (df["joven_15_24"] == 1) & (df["ocupado"] != 1)
+    if ch10.notna().any():
+        no_estudia = ch10.isin([2, 3])
+        df["neet_15_24"] = (joven_no_ocupado & no_estudia).astype(float)
+    else:
+        # Proxy si falta asistencia educativa: joven desocupado o inactivo
+        df["neet_15_24"] = (joven_no_ocupado & (df["desocupado"] == 1)).astype(float)
+    relacion = _col(df, "RELACION")
+    df["jefa_hogar"] = ((relacion == 1) & (df["sexo_mujer"] == 1)).astype(float)
+    df["adulto_mayor_60"] = (_col(df, "CH06") >= 60).astype(float)
     if "REGION" in df.columns:
         reg = _col(df, "REGION").map(REGIONES).fillna("Otra")
         df["region_nombre"] = reg

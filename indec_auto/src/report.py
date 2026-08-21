@@ -81,23 +81,46 @@ def _escribir_excel(resultado: dict, destino) -> None:
         if meta:
             preparar_metadatos_para_excel(meta).to_excel(writer, sheet_name="metadatos", index=False)
         for nombre, hoja in [
+            ("comparativo", "comparativo_ambitos"),
+            ("perfiles", "perfiles_vulnerables"),
+            ("hallazgos_OE", "hallazgos_objetivos"),
             ("descriptivos", "descriptivos_anuales"),
+            ("cuyo_descriptivos", "cuyo_descriptivos_anuales"),
             ("frecuencias", "frecuencias"),
+            ("cuyo_frecuencias", "cuyo_frecuencias"),
             ("correlaciones", "correlaciones"),
+            ("cuyo_correlaciones", "cuyo_correlaciones"),
             ("logistica_coef", "logistica_coeficientes"),
+            ("cuyo_logistica_coef", "cuyo_logistica_coeficientes"),
             ("logistica_or", "logistica_odds_ratios"),
+            ("cuyo_logistica_or", "cuyo_logistica_odds_ratios"),
             ("shap", "shap_importancia"),
+            ("cuyo_shap", "cuyo_shap_importancia"),
             ("cluster_tamanos", "cluster_tamanos"),
+            ("cuyo_cluster_tam", "cuyo_cluster_tamanos"),
             ("cluster_perfiles", "cluster_perfiles"),
+            ("cuyo_cluster_perf", "cuyo_cluster_perfiles"),
         ]:
             df = tablas.get(hoja)
             if df is not None and not df.empty:
                 preparar_df_para_excel(df, incluir_codigo=True).to_excel(
                     writer, sheet_name=nombre[:31], index=False
                 )
+        # Exportar por ámbito si el resultado es multi-ámbito (proyecto Cuyo)
+        por_ambito = resultado.get("por_ambito") or {}
+        for ambito_id, res_amb in por_ambito.items():
+            for hoja, df in (res_amb.get("tablas") or {}).items():
+                if df is None or df.empty:
+                    continue
+                sheet = f"{ambito_id[:8]}_{hoja}"[:31]
+                preparar_df_para_excel(df, incluir_codigo=True).to_excel(
+                    writer, sheet_name=sheet, index=False
+                )
         modelos = resultado.get("modelos", {})
         if modelos:
-            pd.DataFrame([modelos]).to_excel(writer, sheet_name="resumen_modelos", index=False)
+            pd.DataFrame([{"clave": k, "detalle": str(v)[:5000]} for k, v in modelos.items()]).to_excel(
+                writer, sheet_name="resumen_modelos", index=False
+            )
 
 
 def exportar_excel_bytes(resultado: dict) -> bytes:
@@ -161,6 +184,12 @@ def exportar_word(
         f"con variables proxy de exclusión digital y movilidad social."
     )
 
+    hallazgos = resultado.get("hallazgos") or []
+    if hallazgos:
+        doc.add_heading("Hallazgos por objetivo del proyecto", level=1)
+        for h in hallazgos:
+            doc.add_paragraph(f"{h.get('objetivo', '')}: {h.get('hallazgo', '')}", style="List Bullet")
+
     corr = resultado.get("correlacion_destacada")
     if corr is not None:
         doc.add_paragraph(
@@ -168,16 +197,24 @@ def exportar_word(
         )
 
     tablas = resultado.get("tablas", {})
-    guia = resumen_interpretacion_indices(tablas.get("descriptivos_anuales"))
+    _agregar_tabla(doc, "Comparativo Nación / Cuyo / provincias", tablas.get("comparativo_ambitos"))
+    _agregar_tabla(doc, "Perfiles vulnerables", tablas.get("perfiles_vulnerables"), max_filas=40)
+    _agregar_tabla(doc, "Hallazgos por objetivo específico", tablas.get("hallazgos_objetivos"), max_filas=20)
+
+    guia = resumen_interpretacion_indices(
+        tablas.get("cuyo_descriptivos_anuales")
+        if tablas.get("cuyo_descriptivos_anuales") is not None
+        else tablas.get("descriptivos_anuales")
+    )
     if guia:
         doc.add_heading("Guía de interpretación de índices (escala 0 a 1)", level=1)
         doc.add_paragraph("Rangos sugeridos: Bajo < 0,33 · Medio 0,33-0,66 · Alto > 0,66.")
         for fila in guia:
             doc.add_paragraph(f"- {fila['interpretacion']}")
 
-    _agregar_tabla(doc, "Indicadores anuales", tablas.get("descriptivos_anuales"))
-    _agregar_tabla(doc, "Frecuencias ponderadas", tablas.get("frecuencias"))
-    _agregar_tabla(doc, "Correlaciones", tablas.get("correlaciones"))
+    _agregar_tabla(doc, "Indicadores anuales", tablas.get("descriptivos_anuales") or tablas.get("cuyo_descriptivos_anuales"))
+    _agregar_tabla(doc, "Frecuencias ponderadas", tablas.get("frecuencias") or tablas.get("cuyo_frecuencias"))
+    _agregar_tabla(doc, "Correlaciones", tablas.get("correlaciones") or tablas.get("cuyo_correlaciones"))
 
     modelos = resultado.get("modelos", {})
     if modelos:
@@ -189,11 +226,31 @@ def exportar_word(
                 texto = str(valor)
             doc.add_paragraph(f"{clave}: {texto[:2000]}")
 
-    _agregar_tabla(doc, "Regresión logística — coeficientes", tablas.get("logistica_coeficientes"))
-    _agregar_tabla(doc, "Regresión logística — odds ratios", tablas.get("logistica_odds_ratios"))
-    _agregar_tabla(doc, "Importancia SHAP (peso relativo %)", tablas.get("shap_importancia"))
-    _agregar_tabla(doc, "Clústeres — tamaño (%)", tablas.get("cluster_tamanos"))
-    _agregar_tabla(doc, "Clústeres — perfiles medios", tablas.get("cluster_perfiles"))
+    _agregar_tabla(
+        doc,
+        "Regresión logística — coeficientes",
+        tablas.get("logistica_coeficientes") or tablas.get("cuyo_logistica_coeficientes"),
+    )
+    _agregar_tabla(
+        doc,
+        "Regresión logística — odds ratios",
+        tablas.get("logistica_odds_ratios") or tablas.get("cuyo_logistica_odds_ratios"),
+    )
+    _agregar_tabla(
+        doc,
+        "Importancia SHAP (peso relativo %)",
+        tablas.get("shap_importancia") or tablas.get("cuyo_shap_importancia"),
+    )
+    _agregar_tabla(
+        doc,
+        "Clústeres — tamaño (%)",
+        tablas.get("cluster_tamanos") or tablas.get("cuyo_cluster_tamanos"),
+    )
+    _agregar_tabla(
+        doc,
+        "Clústeres — perfiles medios",
+        tablas.get("cluster_perfiles") or tablas.get("cuyo_cluster_perfiles"),
+    )
 
     grafico = resultado.get("grafico_shap")
     if grafico and Path(grafico).exists():

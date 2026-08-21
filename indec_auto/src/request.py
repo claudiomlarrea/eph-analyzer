@@ -6,7 +6,13 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .config import AGLOMERADO_SAN_JUAN, ANALISIS_DISPONIBLES, TRIMESTER_TIC, YEARS_BASE
+from .config import (
+    AGLOMERADO_SAN_JUAN,
+    AGLOMERADOS_CUYO,
+    ANALISIS_DISPONIBLES,
+    TRIMESTER_TIC,
+    YEARS_BASE,
+)
 
 
 @dataclass
@@ -17,7 +23,7 @@ class SolicitudAnalisis:
     years: list[int] = field(default_factory=lambda: [max(YEARS_BASE)])
     trimestre: int = TRIMESTER_TIC
     modulo: str = "tic"  # tic | base
-    ambito: str = "nacional"  # nacional | san_juan | aglomerado
+    ambito: str = "nacional"  # nacional | san_juan | cuyo | aglomerado
     aglomerado: int | None = None
     analisis: list[str] = field(default_factory=lambda: ["todos"])
     excel: bool = True
@@ -34,6 +40,8 @@ class SolicitudAnalisis:
     def label(self) -> str:
         if self.ambito == "san_juan":
             return "gran_san_juan"
+        if self.ambito == "cuyo":
+            return "gran_cuyo"
         if self.ambito == "aglomerado" and self.aglomerado is not None:
             return f"aglomerado_{self.aglomerado}"
         return "nacional"
@@ -45,6 +53,13 @@ class SolicitudAnalisis:
         if self.ambito == "aglomerado":
             return self.aglomerado
         return None
+
+    @property
+    def aglomerados_filtro(self) -> list[int] | None:
+        if self.ambito == "cuyo":
+            return list(AGLOMERADOS_CUYO)
+        one = self.aglomerado_filtro
+        return [one] if one is not None else None
 
     @property
     def analisis_resueltos(self) -> set[str]:
