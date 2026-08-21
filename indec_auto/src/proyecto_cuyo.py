@@ -15,10 +15,16 @@ from .config import (
     AGLOMERADOS_CUYO,
     PROYECTO_CUYO_TITULO,
     PROYECTO_CUYO_TRIMESTRE,
+    PROYECTO_CUYO_TRIMESTRES,
     PROYECTO_CUYO_YEAR_MAX,
     PROYECTO_CUYO_YEAR_MIN,
 )
-from .download import available_years, download_panel
+from .download import (
+    available_year_trimesters,
+    available_years,
+    download_panel,
+    download_panel_periodos,
+)
 from .prepare import build_analysis_frame, validate_microdata, weighted_mean
 
 ANALISIS_PROYECTO = {"descriptivos", "frecuencias", "correlaciones", "logistica", "cluster", "shap"}
@@ -36,6 +42,50 @@ def anios_proyecto_disponibles(trimestre: int = PROYECTO_CUYO_TRIMESTRE) -> list
     """Años del proyecto (2024–actual) disponibles en fuente automática."""
     disponibles = available_years(trimestre, PROYECTO_CUYO_YEAR_MIN, PROYECTO_CUYO_YEAR_MAX)
     return [y for y in disponibles if PROYECTO_CUYO_YEAR_MIN <= y <= PROYECTO_CUYO_YEAR_MAX]
+
+
+def periodos_proyecto_disponibles() -> list[tuple[int, int]]:
+    """Todos los (año, trimestre) disponibles en 2024–2026 (o hasta YEAR_MAX)."""
+    return available_year_trimesters(
+        PROYECTO_CUYO_YEAR_MIN,
+        PROYECTO_CUYO_YEAR_MAX,
+        trimesters=PROYECTO_CUYO_TRIMESTRES,
+    )
+
+
+def _descriptivos_por_periodo(df: pd.DataFrame) -> pd.DataFrame:
+    """Indicadores ponderados por año y trimestre."""
+    rows = []
+    group_cols = [c for c in ["anio", "trimestre"] if c in df.columns]
+    if not group_cols:
+        return pd.DataFrame()
+    for keys, g in df.groupby(group_cols):
+        if not isinstance(keys, tuple):
+            keys = (keys,)
+        w = g["PONDERA"]
+        row = {col: val for col, val in zip(group_cols, keys)}
+        row["n"] = len(g)
+        for col, key, as_pct in [
+            ("idx_exclusion_digital", "idx_exclusion_digital", False),
+            ("score_movilidad_proxy", "score_movilidad_proxy", False),
+            ("vulnerabilidad_social", "vulnerabilidad_social", False),
+            ("exclusion_digital_alta", "pct_exclusion_digital_alta", True),
+            ("secundario_completo", "pct_secundario_completo", True),
+            ("ocupado", "pct_ocupado", True),
+            ("excl_sin_internet_hogar", "pct_sin_internet_hogar", True),
+            ("excl_sin_uso_internet", "pct_sin_uso_internet", True),
+            ("neet_15_24", "pct_neet_15_24", True),
+            ("jefa_hogar", "pct_jefa_hogar", True),
+            ("adulto_mayor_60", "pct_adulto_mayor_60", True),
+        ]:
+            if col not in g.columns or not g[col].notna().any():
+                row[key] = float("nan")
+            else:
+                val = weighted_mean(g[col], w)
+                row[key] = val * 100 if as_pct else val
+        rows.append(row)
+    out = pd.DataFrame(rows)
+    return out.sort_values(group_cols).reset_index(drop=True) if not out.empty else out
 
 
 def _kpi_ambito(df: pd.DataFrame, ambito: str, label: str) -> dict:
@@ -220,30 +270,40 @@ def ejecutar_proyecto_cuyo(
     *,
     years: list[int] | None = None,
     trimestre: int = PROYECTO_CUYO_TRIMESTRE,
+    periodos: list[tuple[int, int]] | None = None,
     force_download: bool = False,
     titulo: str = PROYECTO_CUYO_TITULO,
     progress: Callable[[str], None] | None = None,
 ) -> dict:
-    """Descarga microdatos INDEC del período y ejecuta el paquete completo del proyecto."""
+    """Descarga microdatos INDEC de todos los trimestres disponibles (2024–2026) y analiza."""
 
     def _log(msg: str) -> None:
         if progress:
             progress(msg)
 
-    if years is None:
-        years = anios_proyecto_disponibles(trimestre)
-    if not years:
+    if periodos is None:
+        if years is not None:
+            # Compatibilidad: un solo trimestre para los años indicados
+            periodos = [(y, trimestre) for y in years]
+        else:
+            periodos = periodos_proyecto_disponibles()
+
+    if not periodos:
         raise RuntimeError(
-            f"No hay años disponibles en fuente automática para T{trimestre} "
-            f"en el rango {PROYECTO_CUYO_YEAR_MIN}–{PROYECTO_CUYO_YEAR_MAX}."
+            f"No hay períodos (año-trimestre) disponibles en fuente automática "
+            f"para {PROYECTO_CUYO_YEAR_MIN}–{PROYECTO_CUYO_YEAR_MAX}."
         )
 
-    _log(f"Descargando microdatos EPH T{trimestre} · años {min(years)}–{max(years)}…")
-    hogar, individual = download_panel(years=list(years), trimester=trimestre, force=force_download)
+    periodos = sorted(set(periodos))
+    years_used = sorted({y for y, _ in periodos})
+    periodos_txt = ", ".join(f"{y}T{t}" for y, t in periodos)
+    _log(f"Descargando microdatos EPH · períodos: {periodos_txt}…")
+    hogar, individual = download_panel_periodos(periodos, force=force_download)
 
     resultados_por_ambito: dict[str, dict] = {}
     kpis: list[dict] = []
     perfiles_por_ambito: list[pd.DataFrame] = []
+    series_por_ambito: list[pd.DataFrame] = []
 
     for ambito, label, aglos in AMBITOS_PROYECTO:
         _log(f"Analizando ámbito: {label}…")
@@ -262,7 +322,7 @@ def ejecutar_proyecto_cuyo(
             "titulo": titulo,
             "ambito": label,
             "ambito_id": ambito,
-            "periodo": f"{min(years)}–{max(years)} (T{trimestre})",
+            "periodo": periodos_txt,
             "registros": len(df),
             "validacion": val,
             "modulo": "tic",
@@ -277,19 +337,31 @@ def ejecutar_proyecto_cuyo(
             perf.insert(0, "ambito", ambito)
             perf.insert(1, "label", label)
             perfiles_por_ambito.append(perf)
+        serie = _descriptivos_por_periodo(df)
+        if not serie.empty:
+            serie.insert(0, "ambito", ambito)
+            serie.insert(1, "label", label)
+            series_por_ambito.append(serie)
+            res["tablas"]["descriptivos_periodos"] = serie.drop(columns=["ambito", "label"], errors="ignore")
 
     comparativo = pd.DataFrame(kpis)
     perfiles = pd.concat(perfiles_por_ambito, ignore_index=True) if perfiles_por_ambito else pd.DataFrame()
-    hallazgos = _hallazgos_objetivos(comparativo, perfiles.loc[perfiles["ambito"] == "gran_cuyo"] if not perfiles.empty else perfiles)
+    series = pd.concat(series_por_ambito, ignore_index=True) if series_por_ambito else pd.DataFrame()
+    hallazgos = _hallazgos_objetivos(
+        comparativo,
+        perfiles.loc[perfiles["ambito"] == "gran_cuyo"] if not perfiles.empty else perfiles,
+    )
 
-    # Tabla principal del observatorio (Nación vs Cuyo vs provincias)
     tablas_proyecto = {
         "comparativo_ambitos": comparativo,
         "perfiles_vulnerables": perfiles,
+        "serie_trimestral": series,
         "hallazgos_objetivos": pd.DataFrame(hallazgos),
+        "periodos_analizados": pd.DataFrame(
+            [{"anio": y, "trimestre": t, "periodo": f"{y}T{t}"} for y, t in periodos]
+        ),
     }
 
-    # Adjuntar tablas del ámbito Gran Cuyo (o Nación si faltara) como núcleo
     nucleo = resultados_por_ambito.get("gran_cuyo") or resultados_por_ambito.get("nacional")
     if nucleo:
         for k, v in nucleo.get("tablas", {}).items():
@@ -305,10 +377,11 @@ def ejecutar_proyecto_cuyo(
         "meta": {
             "titulo": titulo,
             "ambito": "Proyecto Cuyo (multi-ámbito)",
-            "periodo": f"{min(years)}–{max(years)} (T{trimestre})",
+            "periodo": periodos_txt,
             "registros": int(comparativo["n"].sum()) if not comparativo.empty else 0,
-            "anios": years,
-            "trimestre": trimestre,
+            "anios": years_used,
+            "periodos": periodos,
+            "trimestre": "todos_disponibles",
             "modulo": "tic",
             "fuente": "INDEC — EPH hogar + individuo + TIC/MAUTIC (automático)",
             "proyecto": "Brecha digital y movilidad social en Cuyo (UCCuyo)",

@@ -148,6 +148,55 @@ def download_panel(
     return pd.concat(hogares, ignore_index=True), pd.concat(individuos, ignore_index=True)
 
 
+def available_year_trimesters(
+    year_min: int,
+    year_max: int,
+    trimesters: list[int] | tuple[int, ...] = (1, 2, 3, 4),
+) -> list[tuple[int, int]]:
+    """Pares (año, trimestre) disponibles en mirror GitHub o ZIP INDEC."""
+    out: list[tuple[int, int]] = []
+    for year in range(year_min, year_max + 1):
+        for trimester in trimesters:
+            ok_github = _url_exists(_url("hogar", year, trimester)) and _url_exists(
+                _url("individual", year, trimester)
+            )
+            ok_indec = _url_exists(_indec_zip_url(year, trimester))
+            if ok_github or ok_indec:
+                out.append((year, trimester))
+    return out
+
+
+def download_panel_periodos(
+    periodos: list[tuple[int, int]],
+    *,
+    force: bool = False,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Descarga y concatena múltiples (año, trimestre)."""
+    if not periodos:
+        raise RuntimeError("No hay períodos (año, trimestre) para descargar.")
+    hogares, individuos = [], []
+    errors: list[str] = []
+    for year, trimester in periodos:
+        try:
+            h, i = download_trimester(year, trimester, force=force)
+        except Exception as exc:
+            errors.append(f"{year}T{trimester}: {exc}")
+            continue
+        h = h.copy()
+        i = i.copy()
+        h["anio"] = year
+        h["trimestre"] = trimester
+        i["anio"] = year
+        i["trimestre"] = trimester
+        hogares.append(h)
+        individuos.append(i)
+    if not hogares:
+        raise RuntimeError(
+            "No se pudo descargar ningún período. Detalle: " + "; ".join(errors[:5])
+        )
+    return pd.concat(hogares, ignore_index=True), pd.concat(individuos, ignore_index=True)
+
+
 def download_panel_tic(
     years: list[int] | None = None,
     trimester: int = TRIMESTER_TIC,

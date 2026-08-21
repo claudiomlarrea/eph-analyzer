@@ -31,8 +31,11 @@ from indec_auto.src.config import (
 )
 from indec_auto.src.download import available_years, download_panel
 from indec_auto.src.prepare import build_analysis_frame, validate_microdata
-from indec_auto.src.proyecto_cuyo import anios_proyecto_disponibles, ejecutar_proyecto_cuyo
-from indec_auto.src.report import exportar_excel_bytes, exportar_word_bytes, resumen_interpretacion_indices
+from indec_auto.src.proyecto_cuyo import (
+    anios_proyecto_disponibles,
+    ejecutar_proyecto_cuyo,
+    periodos_proyecto_disponibles,
+)from indec_auto.src.report import exportar_excel_bytes, exportar_word_bytes, resumen_interpretacion_indices
 from indec_auto.src.request import SolicitudAnalisis
 from src.etiquetador import nombre_completo
 
@@ -79,25 +82,35 @@ def anios_proyecto_cache(trimestre: int) -> list[int]:
         return []
 
 
+@st.cache_data(show_spinner=False, ttl=3600)
+def periodos_proyecto_cache() -> list[tuple[int, int]]:
+    try:
+        return periodos_proyecto_disponibles()
+    except Exception:
+        return []
+
+
 # ---------------------------------------------------------------------------
 # Modo Proyecto Cuyo (one-click)
 # ---------------------------------------------------------------------------
 st.header("Proyecto Cuyo — un clic")
 st.markdown(
     f"**{PROYECTO_CUYO_TITULO}**  \n"
-    "Descarga directa de microdatos INDEC (T4 / TIC), analiza Nación + Gran Cuyo + "
-    "Mendoza + San Luis + San Juan, y genera los resultados de los objetivos del proyecto."
+    "Descarga microdatos INDEC de **todos los trimestres disponibles (2024–2026)**, "
+    "analiza Nación + Gran Cuyo + Mendoza + San Luis + San Juan, y genera los resultados "
+    "de la observación empírica alineados a los objetivos del proyecto (ejecución 2025–2026)."
 )
 
-anios_proy = anios_proyecto_cache(PROYECTO_CUYO_TRIMESTRE)
-if anios_proy:
+periodos_proy = periodos_proyecto_cache()
+if periodos_proy:
     st.info(
-        f"Años disponibles para el proyecto (T{PROYECTO_CUYO_TRIMESTRE}): "
-        f"**{anios_proy[0]}–{anios_proy[-1]}** · rango objetivo {PROYECTO_CUYO_YEAR_MIN}–{PROYECTO_CUYO_YEAR_MAX}."
+        f"Períodos detectados: **{len(periodos_proy)}** "
+        f"({periodos_proy[0][0]}T{periodos_proy[0][1]} … "
+        f"{periodos_proy[-1][0]}T{periodos_proy[-1][1]})."
     )
 else:
     st.warning(
-        f"No se detectaron años {PROYECTO_CUYO_YEAR_MIN}–{PROYECTO_CUYO_YEAR_MAX} en T{PROYECTO_CUYO_TRIMESTRE}. "
+        f"No se detectaron períodos {PROYECTO_CUYO_YEAR_MIN}–{PROYECTO_CUYO_YEAR_MAX}. "
         "Podés forzar descarga o usar el modo manual abajo."
     )
 
@@ -121,8 +134,7 @@ if ejecutar_proyecto:
 
         try:
             resultado = ejecutar_proyecto_cuyo(
-                years=anios_proy or None,
-                trimestre=PROYECTO_CUYO_TRIMESTRE,
+                periodos=periodos_proy or None,
                 force_download=force_proyecto,
                 titulo=PROYECTO_CUYO_TITULO,
                 progress=_progress,
@@ -135,7 +147,7 @@ if ejecutar_proyecto:
         st.session_state["indec_resultado"] = resultado
         st.session_state["indec_solicitud"] = SolicitudAnalisis(
             titulo=PROYECTO_CUYO_TITULO,
-            years=resultado["meta"].get("anios", anios_proy),
+            years=resultado["meta"].get("anios", [PROYECTO_CUYO_YEAR_MIN, PROYECTO_CUYO_YEAR_MAX]),
             trimestre=PROYECTO_CUYO_TRIMESTRE,
             modulo="tic",
             ambito="cuyo",

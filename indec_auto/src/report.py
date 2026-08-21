@@ -83,9 +83,12 @@ def _escribir_excel(resultado: dict, destino) -> None:
         for nombre, hoja in [
             ("comparativo", "comparativo_ambitos"),
             ("perfiles", "perfiles_vulnerables"),
+            ("serie_trimestral", "serie_trimestral"),
+            ("periodos", "periodos_analizados"),
             ("hallazgos_OE", "hallazgos_objetivos"),
             ("descriptivos", "descriptivos_anuales"),
             ("cuyo_descriptivos", "cuyo_descriptivos_anuales"),
+            ("cuyo_periodos", "cuyo_descriptivos_periodos"),
             ("frecuencias", "frecuencias"),
             ("cuyo_frecuencias", "cuyo_frecuencias"),
             ("correlaciones", "correlaciones"),

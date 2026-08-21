@@ -473,38 +473,51 @@ def ejecutar_analisis(
 
     target_modelo = _target_disponible(df)
     if "logistica" in tipos:
-        logit = regresion_logistica(df, target=target_modelo)
-        modelos["logistica"] = logit
-        coef, or_df = logistica_a_tablas(logit)
-        tablas["logistica_coeficientes"] = coef
-        tablas["logistica_odds_ratios"] = or_df
+        try:
+            logit = regresion_logistica(df, target=target_modelo)
+            modelos["logistica"] = logit
+            coef, or_df = logistica_a_tablas(logit)
+            tablas["logistica_coeficientes"] = coef
+            tablas["logistica_odds_ratios"] = or_df
+        except Exception as exc:
+            modelos["logistica"] = {"error": str(exc)}
 
     if "cluster" in tipos:
-        clust = clustering_kmeans(df)
-        modelos["cluster"] = clust
-        nombres = clust.get("nombres_clusters", {})
-        if "tamano_cluster_pct" in clust:
-            tam = _dict_a_df_local(clust["tamano_cluster_pct"], "cluster", "pct")
-            tam["cluster"] = tam["cluster"].astype(int)
-            tam["nombre_cluster"] = tam["cluster"].map(nombres)
-            tablas["cluster_tamanos"] = tam[["cluster", "nombre_cluster", "pct"]]
-        if "perfiles_medios" in clust:
-            perfiles = pd.DataFrame(clust["perfiles_medios"]).T.reset_index().rename(
-                columns={"index": "cluster"}
-            )
-            perfiles["cluster"] = perfiles["cluster"].astype(int)
-            perfiles["nombre_cluster"] = perfiles["cluster"].map(nombres)
-            cols = ["cluster", "nombre_cluster"] + [
-                c for c in perfiles.columns if c not in ("cluster", "nombre_cluster")
-            ]
-            tablas["cluster_perfiles"] = perfiles[cols]
+        try:
+            clust = clustering_kmeans(df)
+            modelos["cluster"] = clust
+            nombres = clust.get("nombres_clusters", {})
+            if "tamano_cluster_pct" in clust:
+                tam = _dict_a_df_local(clust["tamano_cluster_pct"], "cluster", "pct")
+                tam["cluster"] = tam["cluster"].astype(int)
+                tam["nombre_cluster"] = tam["cluster"].map(nombres)
+                tablas["cluster_tamanos"] = tam[["cluster", "nombre_cluster", "pct"]]
+            if "perfiles_medios" in clust and clust.get("perfiles_medios"):
+                por_cluster = _perfiles_por_cluster(clust["perfiles_medios"])
+                if por_cluster:
+                    perfiles = (
+                        pd.DataFrame.from_dict(por_cluster, orient="index")
+                        .reset_index()
+                        .rename(columns={"index": "cluster"})
+                    )
+                    perfiles["cluster"] = perfiles["cluster"].astype(int)
+                    perfiles["nombre_cluster"] = perfiles["cluster"].map(nombres)
+                    cols = ["cluster", "nombre_cluster"] + [
+                        c for c in perfiles.columns if c not in ("cluster", "nombre_cluster")
+                    ]
+                    tablas["cluster_perfiles"] = perfiles[cols]
+        except Exception as exc:
+            modelos["cluster"] = {"error": str(exc)}
 
     if "shap" in tipos:
-        shap_res = shap_importance(df, target=target_modelo, out_dir=out, prefix=label)
-        modelos["shap"] = shap_res
-        tablas["shap_importancia"] = shap_a_tabla(shap_res)
-        grafico_shap = shap_res.get("grafico")
-
+        try:
+            shap_res = shap_importance(df, target=target_modelo, out_dir=out, prefix=label)
+            modelos["shap"] = shap_res
+            tablas["shap_importancia"] = shap_a_tabla(shap_res)
+            grafico_shap = shap_res.get("grafico")
+        except Exception as exc:
+            modelos["shap"] = {"error": str(exc)}
+            grafico_shap = None
     if (
         "descriptivos" in tipos
         and not tablas.get("descriptivos_anuales", pd.DataFrame()).empty

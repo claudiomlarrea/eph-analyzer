@@ -26,13 +26,15 @@ AGLOMERADO_SAN_LUIS = 26
 # Gran Cuyo urbano (EPH): Mendoza, San Luis y San Juan
 AGLOMERADOS_CUYO = (AGLOMERADO_MENDOZA, AGLOMERADO_SAN_LUIS, AGLOMERADO_SAN_JUAN)
 
-# Preset del proyecto UCCuyo: brecha digital y movilidad social en Cuyo
+# Preset del proyecto UCCuyo: observación empírica de brecha digital y movilidad social en Cuyo
+# Período de ejecución del proyecto: 2025–2026; ventana empírica de microdatos: 2024–2026
 PROYECTO_CUYO_YEAR_MIN = 2024
 PROYECTO_CUYO_YEAR_MAX = YEAR_MAX
-PROYECTO_CUYO_TRIMESTRE = TRIMESTER_TIC
+PROYECTO_CUYO_TRIMESTRES = (1, 2, 3, 4)
+PROYECTO_CUYO_TRIMESTRE = TRIMESTER_TIC  # preferido para variables TIC (MAUTIC)
 PROYECTO_CUYO_TITULO = (
     "Brecha digital y movilidad social en Cuyo: "
-    "observatorio empírico con microdatos EPH/TIC (2024–2026)"
+    "observación empírica con microdatos EPH/TIC e inteligencia artificial explicable (2024–2026)"
 )
 
 REGIONES = {
