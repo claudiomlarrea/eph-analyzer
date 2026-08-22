@@ -14,7 +14,7 @@ from docx.shared import Pt
 from pptx import Presentation
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT_DIR = ROOT / "gemeph" / "jornadas_ia_2026"
+OUT_DIR = ROOT / "JORNADAS IA 2026"
 TEMPLATE_WORD = Path(
     "/home/ubuntu/.cursor/projects/workspace/uploads/plantilla-resumen-jornadas-ia-2026__2__9baa.docx"
 )
