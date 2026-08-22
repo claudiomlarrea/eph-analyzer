@@ -19,7 +19,10 @@ TEMPLATE_WORD = Path(
     "/home/ubuntu/.cursor/projects/workspace/uploads/plantilla-resumen-jornadas-ia-2026__2__9baa.docx"
 )
 TEMPLATE_PPT = Path(
-    "/home/ubuntu/.cursor/projects/workspace/uploads/plantilla-presentacion-jornadas-ia-2026__3__c4ad.pptx"
+    "/home/ubuntu/.cursor/projects/workspace/uploads/plantilla-presentacion-jornadas-ia-2026_4fe1.pptx"
+)
+SOURCE_WORD = Path(
+    "/home/ubuntu/.cursor/projects/workspace/uploads/Investigacion_UCCuyo_Larrea_GEMEPH_GemeloDigitalEPH_8ced.docx"
 )
 
 TITULO = (
@@ -231,41 +234,47 @@ REFERENCIAS = (
 
 PPT_CONTENT = {
     1: (
-        f"{TITULO}\n\n"
+        "GEMEPH: gemelo digital sociodemográfico de la EPH-INDEC para simular "
+        "exclusión digital, vulnerabilidad y brechas territoriales en Argentina\n\n"
         "Autores: C. Larrea Arnau¹, J. La Malfa², J. Coria¹, S. Young¹\n"
         "Observatorio de Inteligencia Artificial — Universidad Católica de Cuyo\n"
         "observatorioia@uccuyo.edu.ar"
     ),
     2: (
-        "¿Qué problema aborda GEMEPH?\n"
-        "• Construir un gemelo digital sociodemográfico sobre microdatos oficiales EPH-INDEC\n"
-        "• Simular escenarios what-if de conectividad, educación y formalidad laboral\n"
-        "• Comparar exclusión digital, vulnerabilidad y brechas entre 31 aglomerados urbanos\n"
-        "• Aportar evidencia reproducible para investigación y decisión en la UCCuyo"
+        "¿Qué problema o pregunta aborda el trabajo?\n"
+        "• Objetivo: construir y validar un gemelo digital sociodemográfico territorial "
+        "sobre microdatos oficiales EPH-INDEC\n"
+        "• Contexto: la EPH describe la realidad observada, pero no simula escenarios "
+        "what-if de conectividad, educación y formalidad laboral\n"
+        "• Institucional: proyecto del Observatorio de Inteligencia Artificial · UCCuyo\n"
+        "• Pertinencia regional: comparar exclusión digital y vulnerabilidad en "
+        "31 aglomerados urbanos argentinos"
     ),
     3: (
         "¿Cómo se hizo?\n"
-        "• Panel EPH 2022–2024 (T4, módulo TIC): 114.280 registros; 31 aglomerados + nacional\n"
-        "• Python, scikit-learn, Streamlit; indicadores ponderados (PONDERA)\n"
-        "• Palancas: internet quintil I, educación superior, empleo formal\n"
-        "• Tres escenarios ficticios (E1 conectividad; E2 educación; E3 paquete integrado)\n"
-        "• Plataforma pública: eph-analyzer.streamlit.app/GEMEPH"
+        "• Diseño: investigación aplicada tecnológica; panel EPH 2022–2024 (T4, módulo TIC)\n"
+        "• Datos: 114.280 registros; indicadores ponderados (PONDERA); 31 aglomerados + nacional\n"
+        "• Herramientas: Python, pandas, scikit-learn, Streamlit, Plotly\n"
+        "• Palancas de simulación: internet quintil I, educación superior, empleo formal\n"
+        "• Escenarios ficticios E1 (conectividad), E2 (educación 40%), E3 (paquete integrado)"
     ),
     4: (
         "¿Qué se obtuvo?\n"
-        "• Baseline: exclusión digital 0,6205; 53,96% exclusión alta; movilidad proxy 0,4774\n"
-        "• Brecha territorial: mayor exclusión en Ushuaia–Río Grande; menor en Gran Córdoba\n"
-        "• E1: efecto marginal de conectividad (cobertura quintil bajo ya en 94,3%)\n"
-        "• E2: educación al 40% eleva movilidad proxy +0,0409\n"
-        "• E3: paquete integrado reduce exclusión predicha 6,08% → 5,84%"
+        "• Baseline nacional: exclusión digital 0,6205; 53,96% exclusión alta; "
+        "movilidad proxy 0,4774; ocupación 58,62%\n"
+        "• Brecha territorial: mayor exclusión en Ushuaia–Río Grande (0,6298); "
+        "menor en Gran Córdoba (0,5979)\n"
+        "• E1 conectividad inclusiva: efecto marginal (internet quintil bajo ya al 94,3%)\n"
+        "• E2 educación superior al 40%: movilidad proxy +0,0409\n"
+        "• E3 paquete integrado: exclusión predicha 6,08% → 5,84%"
     ),
     5: (
-        "Mensajes clave\n"
-        "• El gemelo no reemplaza al INDEC: simula sobre el dato oficial con trazabilidad\n"
-        "• Una sola palanca digital aporta retornos decrecientes; educación y paquetes integrados "
-        "mueven más indicadores de oportunidad\n"
-        "• Infraestructura abierta del Observatorio de IA para docencia, investigación y "
-        "actualización con cada onda EPH"
+        "Mensajes clave para llevarse\n"
+        "• GEMEPH no reemplaza al INDEC: simula sobre el dato oficial con trazabilidad\n"
+        "• La sola conectividad aporta retornos decrecientes; la educación y los paquetes "
+        "integrados mueven más indicadores de oportunidad\n"
+        "• Plataforma pública del Observatorio de IA, actualizable con cada onda EPH\n"
+        "• Próximos pasos: ampliar escenarios, publicaciones y convenios institucionales"
     ),
     6: (
         "Gracias\n\n"
@@ -399,16 +408,22 @@ def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     word_out = OUT_DIR / "Investigacion_UCCuyo_Larrea_GEMEPH_GemeloDigitalEPH.docx"
     ppt_out = OUT_DIR / "Investigacion_UCCuyo_Larrea_GEMEPH.pptx"
-    ppt_alt = OUT_DIR / "Presentacion_GEMEPH_Jornadas_IA_2026.pptx"
+    ppt_named = OUT_DIR / "plantilla-presentacion-jornadas-ia-2026.pptx"
 
-    wc = build_word(word_out)
+    # Si existe el artículo fuente subido, copiarlo a la carpeta de entrega
+    if SOURCE_WORD.exists():
+        shutil.copy2(SOURCE_WORD, word_out)
+
+    wc = build_word(word_out) if not SOURCE_WORD.exists() else _word_count(
+        INTRO, MARCO, METODOLOGIA, RESULTADOS, DISCUSION
+    )
     build_ppt(ppt_out)
-    shutil.copy2(ppt_out, ppt_alt)
+    shutil.copy2(ppt_out, ppt_named)
 
     print(f"Word: {word_out}")
     print(f"  Palabras (cuerpo): {wc}")
     print(f"PPT:  {ppt_out}")
-    print(f"PPT:  {ppt_alt}")
+    print(f"PPT:  {ppt_named}")
     print(f"  Diapositivas: 6")
 
 
