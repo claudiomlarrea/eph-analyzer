@@ -369,13 +369,20 @@ def build_word(out_path: Path) -> int:
     return wc
 
 
-def _set_shape_text(shape, text: str):
+def _set_shape_text(shape, text: str) -> None:
+    """Reemplaza texto preservando el marco de la plantilla (sin clear())."""
     tf = shape.text_frame
-    tf.clear()
     lines = text.split("\n")
+    if not tf.paragraphs:
+        tf.add_paragraph()
     for i, line in enumerate(lines):
-        para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-        para.text = line
+        if i < len(tf.paragraphs):
+            tf.paragraphs[i].text = line
+        else:
+            tf.add_paragraph().text = line
+    while len(tf.paragraphs) > len(lines):
+        p = tf.paragraphs[-1]._element
+        p.getparent().remove(p)
 
 
 def build_ppt(out_path: Path) -> None:
@@ -392,13 +399,16 @@ def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     word_out = OUT_DIR / "Investigacion_UCCuyo_Larrea_GEMEPH_GemeloDigitalEPH.docx"
     ppt_out = OUT_DIR / "Investigacion_UCCuyo_Larrea_GEMEPH.pptx"
+    ppt_alt = OUT_DIR / "Presentacion_GEMEPH_Jornadas_IA_2026.pptx"
 
     wc = build_word(word_out)
     build_ppt(ppt_out)
+    shutil.copy2(ppt_out, ppt_alt)
 
     print(f"Word: {word_out}")
     print(f"  Palabras (cuerpo): {wc}")
     print(f"PPT:  {ppt_out}")
+    print(f"PPT:  {ppt_alt}")
     print(f"  Diapositivas: 6")
 
 
