@@ -54,7 +54,11 @@ def panel_path(run_id: str) -> Path:
 def save_panel(df: pd.DataFrame, run_id: str) -> Path:
     PANEL_DIR.mkdir(parents=True, exist_ok=True)
     path = panel_path(run_id)
-    df.to_parquet(path, engine="pyarrow", compression="snappy", index=False)
+    out = df.copy()
+    # Microdatos INDEC a veces mezclan int/str en object → falla pyarrow
+    for col in out.select_dtypes(include=["object"]).columns:
+        out[col] = out[col].map(lambda x: "" if x is None else str(x))
+    out.to_parquet(path, engine="pyarrow", compression="snappy", index=False)
     return path
 
 
