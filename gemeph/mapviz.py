@@ -1,4 +1,4 @@
-"""Mapas interactivos GEMEPH (Plotly)."""
+"""Mapas interactivos GEMEPH (Plotly MapLibre)."""
 
 from __future__ import annotations
 
@@ -52,37 +52,45 @@ def build_map_figure(
     geo = geo.dropna(subset=[metrica]).copy()
     label = metric_label or MAP_METRICS.get(metrica, metrica)
     scale = "RdYlGn_r" if metrica in _INVERT_COLOR else "RdYlGn"
+    size_col = next((c for c in ("n_individuos", "n") if c in geo.columns), None)
+    if size_col is None:
+        size_col = "n_individuos"
+        geo[size_col] = 1
 
-    geo["hover"] = geo.apply(
-        lambda r: (
-            f"<b>{r['territorio_nombre']}</b><br>"
-            f"{label}: {r[metrica]:.4g}<br>"
-            f"Muestra: {int(r.get('n_individuos', 0)):,} individuos"
-        ),
-        axis=1,
-    )
+    name_col = "territorio_nombre" if "territorio_nombre" in geo.columns else geo.columns[0]
 
-    fig = px.scatter_mapbox(
-        geo,
+    # Plotly 7 eliminó scatter_mapbox; usar scatter_map (MapLibre).
+    # Mantener fallback para entornos con Plotly < 5.24.
+    use_maplibre = hasattr(px, "scatter_map")
+    scatter_fn = px.scatter_map if use_maplibre else px.scatter_mapbox
+
+    kwargs = dict(
+        data_frame=geo,
         lat="lat",
         lon="lon",
         color=metrica,
-        size="n_individuos",
+        size=size_col,
         size_max=28,
         color_continuous_scale=scale,
-        mapbox_style="open-street-map",
         zoom=3.6,
         center={"lat": -38.5, "lon": -64.0},
-        hover_name="territorio_nombre",
-        labels={metrica: label, "n_individuos": "Individuos"},
+        hover_name=name_col,
+        labels={metrica: label, size_col: "Individuos"},
         title=f"Mapa territorial — {label}",
     )
+    if use_maplibre:
+        kwargs["map_style"] = "open-street-map"
+    else:
+        kwargs["mapbox_style"] = "open-street-map"
 
-    if highlight_codigo is not None:
+    fig = scatter_fn(**kwargs)
+
+    if highlight_codigo is not None and "aglomerado_codigo" in geo.columns:
         hi = geo.loc[geo["aglomerado_codigo"] == highlight_codigo]
         if not hi.empty:
+            scatter_cls = go.Scattermap if hasattr(go, "Scattermap") else go.Scattermapbox
             fig.add_trace(
-                go.Scattermapbox(
+                scatter_cls(
                     lat=hi["lat"],
                     lon=hi["lon"],
                     mode="markers+text",
