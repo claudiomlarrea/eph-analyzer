@@ -35,7 +35,8 @@ from indec_auto.src.proyecto_cuyo import (
     anios_proyecto_disponibles,
     ejecutar_proyecto_cuyo,
     periodos_proyecto_disponibles,
-)from indec_auto.src.report import exportar_excel_bytes, exportar_word_bytes, resumen_interpretacion_indices
+)
+from indec_auto.src.report import exportar_excel_bytes, exportar_word_bytes, resumen_interpretacion_indices
 from indec_auto.src.request import SolicitudAnalisis
 from src.etiquetador import nombre_completo
 
